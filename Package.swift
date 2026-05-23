@@ -21,9 +21,10 @@ let package = Package(
             dependencies: ["ClaudeUsageCore"],
             path: "Sources/ClaudeUsageApp"
         ),
-        .executableTarget(name: "Spike0aKeychain", path: "Sources/Spike0aKeychain"),
-        .executableTarget(name: "Spike0bUsage", path: "Sources/Spike0bUsage"),
-        .executableTarget(name: "Spike0cRefresh", path: "Sources/Spike0cRefresh"),
-        .executableTarget(name: "Spike0cForceRefresh", path: "Sources/Spike0cForceRefresh"),
+        // Phase 0 feasibility spikes — throwaway, kept for reference under spikes/.
+        .executableTarget(name: "Spike0aKeychain", path: "spikes/Spike0aKeychain"),
+        .executableTarget(name: "Spike0bUsage", path: "spikes/Spike0bUsage"),
+        .executableTarget(name: "Spike0cRefresh", path: "spikes/Spike0cRefresh"),
+        .executableTarget(name: "Spike0cForceRefresh", path: "spikes/Spike0cForceRefresh"),
     ]
 )
