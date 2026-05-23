@@ -13,9 +13,29 @@ SwiftPM project. Build all targets:
 swift build
 ```
 
-Run any executable target:
+### The app (menu bar widget)
+
+`ClaudeUsageApp` is the menu bar agent (status item + popover). For a real run with
+no Dock icon and launch-at-login support, build the `.app` bundle:
 
 ```sh
+./scripts/make-app.sh release     # → build/ClaudeUsageApp.app
+open build/ClaudeUsageApp.app
+```
+
+Running the bare binary works for quick checks but can't do launch-at-login (needs the
+bundle). Left-click the icon for the popover; right-click for the menu (Refresh Now,
+Update Frequency, Open at Login, Quit). Hidden QA modes render design states to PNGs:
+
+```sh
+.build/debug/ClaudeUsageApp --render-samples <dir>   # dual-ring icon contact sheet
+.build/debug/ClaudeUsageApp --render-popover <dir>   # popover panel states
+```
+
+### Other targets
+
+```sh
+.build/debug/ClaudeUsageDaemon      # Phase 1 headless engine (logs snapshots to stdout)
 .build/debug/Spike0aKeychain        # Phase 0 spike: cross-app Keychain read
 .build/debug/Spike0bUsage           # Phase 0 spike: usage endpoint shape
 .build/debug/Spike0cRefresh         # Phase 0 spike: passive CLI-ping observation
