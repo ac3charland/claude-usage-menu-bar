@@ -49,8 +49,10 @@ cd claude-usage-menu-bar
 ./scripts/make-app.sh release
 
 # Launch it
-open build/ClaudeUsageApp.app
+open "build/Claude Usage.app"
 ```
+
+You will need to enter your Mac password in the dialog that appears. To prevent it from appearing every time, select "Always Allow".
 
 The dual-ring icon appears in your menu bar within a couple of seconds (it paints from a
 cached value immediately, then refreshes from a live poll).
@@ -58,7 +60,7 @@ cached value immediately, then refreshes from a live poll).
 To keep it around, drag/copy it into Applications:
 
 ```sh
-cp -R build/ClaudeUsageApp.app /Applications/
+cp -R "build/Claude Usage.app" /Applications/
 ```
 
 **Open at Login is on by default** — on first launch the app installs a per-user

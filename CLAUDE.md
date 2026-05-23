@@ -15,12 +15,13 @@ swift build
 
 ### The app (menu bar widget)
 
-`ClaudeUsageApp` is the menu bar agent (status item + popover). For a real run with
-no Dock icon and launch-at-login support, build the `.app` bundle:
+`ClaudeUsageApp` is the SwiftPM product for the menu bar agent (status item +
+popover); it builds into a user-facing `Claude Usage.app` bundle. For a real run with
+no Dock icon and launch-at-login support, build the bundle:
 
 ```sh
-./scripts/make-app.sh release     # → build/ClaudeUsageApp.app
-open build/ClaudeUsageApp.app
+./scripts/make-app.sh release     # → "build/Claude Usage.app"
+open "build/Claude Usage.app"
 ```
 
 Running the bare binary works for quick checks but can't do launch-at-login (needs the

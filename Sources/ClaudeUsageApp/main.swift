@@ -9,6 +9,12 @@ if let idx = CommandLine.arguments.firstIndex(of: "--render-samples") {
     IconSampleRenderer.run(outputDir: dir)
     exit(0)
 }
+if let idx = CommandLine.arguments.firstIndex(of: "--render-icon") {
+    let dir = CommandLine.arguments.indices.contains(idx + 1)
+        ? CommandLine.arguments[idx + 1] : NSTemporaryDirectory()
+    AppIconRenderer.run(outputDir: dir)
+    exit(0)
+}
 if let idx = CommandLine.arguments.firstIndex(of: "--render-popover") {
     let dir = CommandLine.arguments.indices.contains(idx + 1)
         ? CommandLine.arguments[idx + 1] : NSTemporaryDirectory()
