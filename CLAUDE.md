@@ -2,8 +2,8 @@
 
 Personal macOS menu bar widget for Claude plan usage.
 
-- Technical design + phase plan: `memory/claude-usage-widget-spec.md`
-- Upstream pattern this piggy-backs on: `memory/claude-code-quota.md`
+See `README.md` for what it does, install steps, and prerequisites. Detailed design
+notes live in a local `memory/` folder that is intentionally not tracked in git.
 
 ## Build & run
 

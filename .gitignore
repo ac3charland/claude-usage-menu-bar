@@ -6,3 +6,6 @@ build/
 DerivedData/
 .DS_Store
 Package.resolved
+
+# Local design notes — kept out of the shared repo.
+memory/
