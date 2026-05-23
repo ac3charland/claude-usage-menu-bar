@@ -7,6 +7,7 @@ let package = Package(
     products: [
         .library(name: "ClaudeUsageCore", targets: ["ClaudeUsageCore"]),
         .executable(name: "ClaudeUsageDaemon", targets: ["ClaudeUsageDaemon"]),
+        .executable(name: "ClaudeUsageApp", targets: ["ClaudeUsageApp"]),
     ],
     targets: [
         .target(name: "ClaudeUsageCore", path: "Sources/ClaudeUsageCore"),
@@ -14,6 +15,11 @@ let package = Package(
             name: "ClaudeUsageDaemon",
             dependencies: ["ClaudeUsageCore"],
             path: "Sources/ClaudeUsageDaemon"
+        ),
+        .executableTarget(
+            name: "ClaudeUsageApp",
+            dependencies: ["ClaudeUsageCore"],
+            path: "Sources/ClaudeUsageApp"
         ),
         .executableTarget(name: "Spike0aKeychain", path: "Sources/Spike0aKeychain"),
         .executableTarget(name: "Spike0bUsage", path: "Sources/Spike0bUsage"),

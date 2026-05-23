@@ -1,0 +1,48 @@
+import AppKit
+import ClaudeUsageCore
+
+@MainActor
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    private var statusController: StatusItemController?
+    private let engine = UsageEngine()
+    private var engineTask: Task<Void, Never>?
+    private var staleTimer: Timer?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        let controller = StatusItemController()
+        statusController = controller
+
+        // Apply saved poll cadence before the engine starts.
+        engine.baseIntervalSec = Preferences.pollIntervalSec
+
+        // Engine publishes on the main actor; reflect each state into the icon.
+        engine.onState = { [weak controller] state in
+            controller?.update(state)
+        }
+
+        // Menu actions reach back into the engine.
+        controller.onRefreshNow = { [weak engine] in engine?.refreshNow() }
+        controller.onSetInterval = { [weak engine] seconds in
+            engine?.baseIntervalSec = seconds
+            engine?.refreshNow()
+        }
+
+        engineTask = Task { await engine.run() }
+
+        // Re-evaluate dimming on a timer: data can age into "stale" between polls
+        // (especially during long backoff) without any new engine event.
+        staleTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.statusController?.update(self.engine.state)
+            }
+        }
+
+        Log.info("ClaudeUsageApp launched (menu bar)")
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        engineTask?.cancel()
+        staleTimer?.invalidate()
+    }
+}
