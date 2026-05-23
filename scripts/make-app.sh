@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # Assemble ClaudeUsageApp into a real .app bundle.
 #
-# Why a bundle: launch-at-login (SMAppService.mainApp) and a clean LSUIElement
-# (no Dock icon) both require the executable to live inside a registered .app.
-# Running the bare SwiftPM binary works for development but can't do either.
+# Why a bundle: a clean LSUIElement (no Dock icon) needs the executable inside an
+# .app, and launch-at-login points its LaunchAgent at the bundled executable for a
+# stable path. Running the bare SwiftPM binary works for development but does neither.
+# Launch-at-login uses a ~/Library/LaunchAgents plist (see LoginItem.swift) and needs
+# no code signing.
 #
 # Usage:
 #   scripts/make-app.sh [debug|release]   (default: release)
@@ -53,4 +55,4 @@ PLIST
 
 echo "OK  Built ${APP_DIR}"
 echo "  Run:  open \"${APP_DIR}\""
-echo "  (For launch-at-login + notarization you'll want to codesign this bundle.)"
+echo "  Launch-at-login works unsigned; codesign + notarize only to clear Gatekeeper."

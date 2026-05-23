@@ -29,6 +29,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         engineTask = Task { await engine.run() }
 
+        // Open-at-login is on by default; refreshes a stale plist path on later runs.
+        LoginItem.configureAtLaunch()
+
         // Re-evaluate dimming on a timer: data can age into "stale" between polls
         // (especially during long backoff) without any new engine event.
         staleTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in

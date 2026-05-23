@@ -61,13 +61,17 @@ To keep it around, drag/copy it into Applications:
 cp -R build/ClaudeUsageApp.app /Applications/
 ```
 
-Then, from the icon's right-click menu, toggle **Open at Login** to start it
-automatically.
+**Open at Login is on by default** — on first launch the app installs a per-user
+LaunchAgent (`~/Library/LaunchAgents/com.alexcharland.ClaudeUsageMenuBar.plist`) that
+relaunches it at every login. No code signing required. Toggle it from the icon's
+right-click menu; turning it off is remembered and never re-enabled. If you move the
+`.app`, re-toggle it (or just relaunch) to repoint the LaunchAgent at the new path.
 
-> **Gatekeeper:** this is an unsigned local build. The first launch may need a
-> right-click → **Open**, or run it from `/Applications`. For a polished
-> launch-at-login experience and to share a downloaded build, codesign and notarize the
-> bundle with your Developer ID.
+> **Gatekeeper:** this is an unsigned local build, so the *first* launch of a
+> *downloaded* copy may need a right-click → **Open**. A build you compiled locally
+> isn't quarantined and launches directly. Codesigning + notarizing with a Developer ID
+> is only needed to clear that first-launch prompt and to share the build with others —
+> launch-at-login works without it.
 
 ## Using it
 
