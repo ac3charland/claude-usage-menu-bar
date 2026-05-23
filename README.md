@@ -13,7 +13,7 @@ nothing to log in to and no API key to paste.
 > [Caveats](#caveats) before relying on it.
 
 > [!NOTE]
-> Inspired by Jeremy Ron King's article on [Composer](https://jeremyronking.com/blog/2026/17-remote-agent-experiment-composer). Huge thanks for Jeremy for his help in getting the Claude usage connection working!
+> Inspired by Jeremy Ron King's article on [Composer](https://jeremyronking.com/blog/2026/17-remote-agent-experiment-composer). Huge thanks to Jeremy for his help in getting the Claude usage connection working!
 
 ## What the icon means
 
