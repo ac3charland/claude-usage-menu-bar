@@ -41,7 +41,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        Log.info("Claude Usage launched (menu bar)")
+        Log.info("Claude Usage launched (menu bar) — logging to \(Log.fileURL.path)")
     }
 
     func applicationWillTerminate(_ notification: Notification) {

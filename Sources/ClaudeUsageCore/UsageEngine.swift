@@ -2,6 +2,9 @@ import Foundation
 #if canImport(AppKit)
 import AppKit
 #endif
+#if canImport(Network)
+import Network
+#endif
 
 @MainActor
 public final class UsageEngine {
@@ -17,6 +20,12 @@ public final class UsageEngine {
     private var rateLimitedUntil: Date?
     private var sleepTask: Task<Void, Never>?
     private var wakeObserverToken: NSObjectProtocol?
+    #if canImport(Network)
+    private var pathMonitor: NWPathMonitor?
+    /// Last observed reachability, so we only react to a real offline→online edge
+    /// (not every interface change while already online).
+    private var lastPathSatisfied: Bool?
+    #endif
 
     /// Last good snapshot + its capture time, retained across failures so the UI keeps
     /// showing the last known usage (dimmed) rather than going blank.
@@ -36,6 +45,9 @@ public final class UsageEngine {
             NSWorkspace.shared.notificationCenter.removeObserver(token)
             #endif
         }
+        #if canImport(Network)
+        pathMonitor?.cancel()
+        #endif
     }
 
     public func run() async {
@@ -52,6 +64,7 @@ public final class UsageEngine {
         }
 
         startWakeObserver()
+        startPathObserver()
 
         while !Task.isCancelled {
             await pollOnce()
@@ -184,5 +197,43 @@ public final class UsageEngine {
             }
         }
         #endif
+    }
+
+    /// Watch network reachability and poll the instant connectivity returns. Without this,
+    /// a Wi-Fi switch leaves us asleep in an exponential back-off window (up to 30 min) with
+    /// nothing to wake it — the wake observer only fires on system sleep/wake, not network
+    /// changes. Reacts only to a real offline→online edge.
+    private func startPathObserver() {
+        #if canImport(Network)
+        let monitor = NWPathMonitor()
+        pathMonitor = monitor
+        monitor.pathUpdateHandler = { [weak self] path in
+            let satisfied = path.status == .satisfied
+            // Delivered on the queue passed to start(queue:) below — main — so we're isolated.
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                let previous = self.lastPathSatisfied
+                self.lastPathSatisfied = satisfied
+                if previous == false && satisfied {
+                    self.handleNetworkReconnect()
+                }
+            }
+        }
+        monitor.start(queue: .main)
+        #endif
+    }
+
+    /// Network just came back: drop the transport back-off and poll now, instead of waiting
+    /// out a sleep that could be tens of minutes long.
+    private func handleNetworkReconnect() {
+        // A reconnect doesn't lift a server-side 429, so respect an active rate-limit window.
+        if let until = rateLimitedUntil, until > Date() {
+            Log.info("Network reconnected, but rate-limit window still active — not forcing a poll")
+            return
+        }
+        Log.info("Network reconnected — resetting back-off and polling immediately")
+        failures = 0
+        last429 = false
+        sleepTask?.cancel()
     }
 }

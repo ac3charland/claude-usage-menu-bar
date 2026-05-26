@@ -50,14 +50,25 @@ public enum UsagePoller {
 
         let data: Data
         let response: URLResponse
+        let started = Date()
         do {
             (data, response) = try await URLSession.shared.data(for: req)
         } catch {
+            let elapsed = Date().timeIntervalSince(started)
+            if let urlErr = error as? URLError {
+                // Surface the URLError code by name+number — e.g. -1009 notConnectedToInternet,
+                // -1005 networkConnectionLost (typical mid-WiFi-switch), -1001 timedOut.
+                Log.warn("Usage fetch transport error after \(fmt(elapsed))s: \(urlErr.code.rawValue) \(name(urlErr.code)) — \(urlErr.localizedDescription)")
+            } else {
+                Log.warn("Usage fetch transport error after \(fmt(elapsed))s: \(error)")
+            }
             throw UsageFetchError.transport(error)
         }
+        let elapsed = Date().timeIntervalSince(started)
         guard let http = response as? HTTPURLResponse else {
             throw UsageFetchError.transport(URLError(.badServerResponse))
         }
+        Log.info("Usage fetch HTTP \(http.statusCode) in \(fmt(elapsed))s (\(data.count) bytes)")
 
         let bodyStr = String(data: data, encoding: .utf8) ?? ""
 
@@ -92,6 +103,24 @@ public enum UsagePoller {
             return try decoder.decode(UsageResponse.self, from: data)
         } catch {
             throw UsageFetchError.decode(error, body: bodyStr)
+        }
+    }
+
+    private static func fmt(_ seconds: TimeInterval) -> String {
+        String(format: "%.2f", seconds)
+    }
+
+    /// Human-readable name for the URLError codes we expect around connectivity changes;
+    /// falls back to the raw code for anything else.
+    private static func name(_ code: URLError.Code) -> String {
+        switch code {
+        case .notConnectedToInternet: return "notConnectedToInternet"
+        case .networkConnectionLost: return "networkConnectionLost"
+        case .timedOut: return "timedOut"
+        case .cannotFindHost: return "cannotFindHost"
+        case .cannotConnectToHost: return "cannotConnectToHost"
+        case .dnsLookupFailed: return "dnsLookupFailed"
+        default: return "code\(code.rawValue)"
         }
     }
 }
