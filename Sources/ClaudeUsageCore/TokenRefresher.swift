@@ -58,7 +58,15 @@ public enum TokenRefresher {
             if proc.isRunning { proc.interrupt() }
         }
         let elapsed = Date().timeIntervalSince(started)
-        Log.info("CLI ping exited code=\(proc.terminationStatus) after \(String(format: "%.1f", elapsed))s")
+        let code = proc.terminationStatus
+        if code == 0 {
+            Log.info("CLI ping exited code=0 after \(String(format: "%.1f", elapsed))s")
+        } else {
+            // Most common cause in practice: the keychain entry has an empty refreshToken,
+            // so the CLI can't swap it and exits non-zero. Surface this loudly — the engine
+            // will also detect the unchanged expiry and route to .refreshFailed.
+            Log.warn("CLI ping exited code=\(code) after \(String(format: "%.1f", elapsed))s — token likely not refreshed")
+        }
     }
 
     private static func locateClaudeBinary() -> String? {

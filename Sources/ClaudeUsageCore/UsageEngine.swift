@@ -88,6 +88,20 @@ public final class UsageEngine {
             let didRefresh = await TokenRefresher.refreshIfNeeded(currentExpiresAtMs: creds.expiresAtMs)
             let active = didRefresh ? (try KeychainReader.read()) : creds
 
+            // The endpoint returns 429 (not 401) for an expired bearer once we've hit it
+            // enough times, so a dead token silently turns into an exponential back-off
+            // loop the user reads as "rate limited". Bail out before the fetch when the
+            // refresh didn't actually advance expiry — most often because the keychain
+            // entry has an empty refreshToken (user signed in via an IDE extension that
+            // doesn't persist one) so the CLI ping has nothing to swap.
+            if Date(timeIntervalSince1970: active.expiresAtMs / 1000) <= Date() {
+                failures += 1
+                last429 = false
+                Log.error("Access token still expired after refresh attempt — skipping poll. Run `claude /login` to restore credentials.")
+                publish(.refreshFailed)
+                return
+            }
+
             let response: UsageResponse
             do {
                 response = try await UsagePoller.fetch(accessToken: active.accessToken)
@@ -95,6 +109,10 @@ public final class UsageEngine {
                 Log.warn("Got 401 from usage endpoint — forcing refresh and retrying once")
                 await TokenRefresher.forceRefresh()
                 let retried = try KeychainReader.read()
+                if Date(timeIntervalSince1970: retried.expiresAtMs / 1000) <= Date() {
+                    Log.error("Forced refresh did not advance token expiry — treating as refreshFailed")
+                    throw UsageFetchError.unauthorized
+                }
                 response = try await UsagePoller.fetch(accessToken: retried.accessToken)
             }
 
