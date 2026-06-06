@@ -27,6 +27,14 @@ public enum TokenRefresher {
         await spawnPing()
     }
 
+    /// Auth-override env vars the CLI prefers over Keychain OAuth. If any leak into
+    /// the ping subprocess (e.g. the app was `open`ed from a shell that exported
+    /// CLAUDE_CODE_OAUTH_TOKEN), the CLI authenticates with them, exits 0, and never
+    /// touches the Keychain entry we're trying to refresh — so we strip them.
+    private static let authOverrideEnvVars = [
+        "CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN",
+    ]
+
     private static func spawnPing() async {
         guard let claudePath = locateClaudeBinary() else {
             Log.error("Cannot refresh — `claude` binary not found. Set CLAUDE_BIN to override.")
@@ -36,6 +44,12 @@ public enum TokenRefresher {
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: claudePath)
         proc.arguments = ["-p", "ping \(nonce)", "--model", "haiku"]
+        var env = ProcessInfo.processInfo.environment
+        for key in authOverrideEnvVars where env[key] != nil {
+            env.removeValue(forKey: key)
+            Log.warn("Stripping \(key) from CLI ping env — it would bypass the Keychain refresh")
+        }
+        proc.environment = env
         proc.standardOutput = Pipe()
         proc.standardError = Pipe()
 
