@@ -70,6 +70,23 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
+# Sign with the stable self-signed identity so the app has ONE constant code identity
+# across rebuilds. This is what makes the Keychain "Always Allow" for the
+# Claude Code-credentials read persist instead of re-prompting after every build.
+# (The cert hash → designated requirement is stable; see scripts/make-signing-cert.sh.)
+# Falls back to ad-hoc signing with a warning if the identity isn't installed yet.
+SIGN_CN="Claude Usage Self-Signed"
+if security find-certificate -c "$SIGN_CN" >/dev/null 2>&1; then
+    echo ">> Signing bundle with \"$SIGN_CN\" ..."
+    codesign --force --deep --sign "$SIGN_CN" --identifier "$BUNDLE_ID" "$APP_DIR"
+    codesign -v --verbose=2 "$APP_DIR" 2>&1 | sed 's/^/   /'
+    echo "OK  Signed with stable identity"
+else
+    echo ">> Signing identity \"$SIGN_CN\" not found — ad-hoc signing instead." >&2
+    echo "   Run scripts/make-signing-cert.sh once to stop the repeated Keychain prompts." >&2
+    codesign --force --deep --sign - --identifier "$BUNDLE_ID" "$APP_DIR"
+fi
+
 echo "OK  Built ${APP_DIR}"
 echo "  Run:  open \"${APP_DIR}\""
-echo "  Launch-at-login works unsigned; codesign + notarize only to clear Gatekeeper."
+echo "  Launch-at-login works unsigned; notarize only to clear Gatekeeper on other Macs."
