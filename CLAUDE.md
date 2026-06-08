@@ -46,3 +46,5 @@ Update Frequency, Open at Login, Quit). Hidden QA modes render design states to 
 ## Commit conventions
 
 Use [Conventional Commits](https://www.conventionalcommits.org/). Common types: `feat`, `fix`, `chore`, `refactor`, `docs`, `test`. Scope is optional. Keep the subject line under ~70 chars.
+
+When work is complete, commit and push the changes by default, unless explicitly told otherwise.
