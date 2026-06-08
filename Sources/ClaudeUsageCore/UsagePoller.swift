@@ -2,7 +2,10 @@ import Foundation
 
 public struct UsageWindow: Decodable {
     public let utilization: Double
-    public let resetsAt: Date
+    /// `null` when the window is empty/fully reset (e.g. 0% utilization). The API
+    /// genuinely sends `"resets_at": null` in that state, so this must be optional —
+    /// decoding it as a non-optional Date threw and was mistaken for a poll failure.
+    public let resetsAt: Date?
     enum CodingKeys: String, CodingKey {
         case utilization
         case resetsAt = "resets_at"

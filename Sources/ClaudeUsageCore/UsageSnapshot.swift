@@ -7,11 +7,12 @@ public struct UsageSnapshot: Codable {
 
     public struct WindowState: Codable {
         public let utilizationPct: Double
-        public let resetsAt: Date
+        /// Nil when the window is empty/fully reset and the API reports no reset time.
+        public let resetsAt: Date?
         public let elapsedFraction: Double
         public let isAhead: Bool
 
-        public init(utilizationPct: Double, resetsAt: Date, elapsedFraction: Double, isAhead: Bool) {
+        public init(utilizationPct: Double, resetsAt: Date?, elapsedFraction: Double, isAhead: Bool) {
             self.utilizationPct = utilizationPct
             self.resetsAt = resetsAt
             self.elapsedFraction = elapsedFraction
@@ -39,9 +40,16 @@ public struct UsageSnapshot: Codable {
     }
 
     private static func compute(window: UsageWindow, lengthSec: TimeInterval, now: Date) -> WindowState {
-        let start = window.resetsAt.addingTimeInterval(-lengthSec)
-        let rawElapsed = now.timeIntervalSince(start) / lengthSec
-        let elapsed = min(max(rawElapsed, 0), 1)
+        // With no reset time the window is empty/fresh, so treat it as 0% elapsed.
+        // Any non-zero utilization then reads as "ahead", which is the safe direction.
+        let elapsed: Double
+        if let resetsAt = window.resetsAt {
+            let start = resetsAt.addingTimeInterval(-lengthSec)
+            let rawElapsed = now.timeIntervalSince(start) / lengthSec
+            elapsed = min(max(rawElapsed, 0), 1)
+        } else {
+            elapsed = 0
+        }
         let isAhead = (window.utilization / 100.0) > elapsed
         return WindowState(
             utilizationPct: window.utilization,
