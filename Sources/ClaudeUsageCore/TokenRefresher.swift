@@ -7,6 +7,18 @@ public enum TokenRefresher {
     /// Hard timeout for the `claude` ping subprocess.
     public static let cliTimeoutSeconds: TimeInterval = 30
 
+    /// Minimum spacing between CLI ping attempts for the *same* unrefreshed token.
+    /// Without it, a token sitting inside the 30-min refresh margin gets pinged on every
+    /// 2-min poll — ~14 redundant `claude` spawns per token cycle (and a Keychain
+    /// re-read after each), since the CLI only actually swaps the token near real expiry.
+    public static let pingCooldownSeconds: TimeInterval = 10 * 60
+
+    /// Expiry (ms) we last pinged for, plus when. A successful refresh advances the
+    /// expiry past the margin so the next poll returns early; this guard only bites when
+    /// the previous ping did *not* refresh (token still valid, or no usable refreshToken).
+    private static var lastPingedExpiryMs: Double?
+    private static var lastPingAt: Date?
+
     /// Returns true if a refresh attempt was made.
     /// The caller is expected to re-read the Keychain afterwards if true.
     @discardableResult
@@ -16,7 +28,15 @@ public enum TokenRefresher {
         if expiresAt.timeIntervalSince(now) > marginSec {
             return false
         }
+        if lastPingedExpiryMs == currentExpiresAtMs,
+           let last = lastPingAt, now.timeIntervalSince(last) < pingCooldownSeconds {
+            // Already pinged this exact token recently and it hasn't been refreshed.
+            // Re-spawning `claude` every poll won't help — wait out the cooldown.
+            return false
+        }
         Log.info("Token expires in \(Int(expiresAt.timeIntervalSince(now) / 60))min — refreshing via CLI ping")
+        lastPingedExpiryMs = currentExpiresAtMs
+        lastPingAt = now
         await spawnPing()
         return true
     }
