@@ -8,12 +8,21 @@
 # no code signing.
 #
 # Usage:
-#   scripts/make-app.sh [debug|release]   (default: release)
+#   scripts/make-app.sh [debug|release] [--no-install]   (default: release, install)
 #
-# Output: build/Claude Usage.app
+# Output: build/Claude Usage.app, then deployed to /Applications/Claude Usage.app
+# (the launch location) unless --no-install is passed for a pure dev build.
 set -euo pipefail
 
-CONFIG="${1:-release}"
+CONFIG="release"
+INSTALL=1
+for arg in "$@"; do
+    case "$arg" in
+        debug|release) CONFIG="$arg" ;;
+        --no-install)  INSTALL=0 ;;
+        *) echo "Unknown argument: $arg (expected debug|release|--no-install)" >&2; exit 2 ;;
+    esac
+done
 BUNDLE_ID="com.alexcharland.ClaudeUsageMenuBar"
 PRODUCT="ClaudeUsageApp"        # SwiftPM product / build binary (internal identifier)
 APP_NAME="Claude Usage"         # user-facing .app bundle and executable name
@@ -88,5 +97,18 @@ else
 fi
 
 echo "OK  Built ${APP_DIR}"
-echo "  Run:  open \"${APP_DIR}\""
+
+if [ "$INSTALL" -eq 1 ]; then
+    APP_INSTALL="/Applications/$APP_NAME.app"
+    echo ">> Installing to ${APP_INSTALL} ..."
+    # Quit a running copy first so we don't overwrite a live bundle mid-run. The
+    # login-item LaunchAgent points at this same path, so it self-heals on next launch.
+    osascript -e "quit app \"$APP_NAME\"" 2>/dev/null || true
+    rm -rf "$APP_INSTALL"
+    ditto "$APP_DIR" "$APP_INSTALL"   # ditto preserves the code signature
+    echo "OK  Installed ${APP_INSTALL}"
+    echo "  Run:  open \"${APP_INSTALL}\""
+else
+    echo "  Run:  open \"${APP_DIR}\"   (build only; --no-install)"
+fi
 echo "  Launch-at-login works unsigned; notarize only to clear Gatekeeper on other Macs."
