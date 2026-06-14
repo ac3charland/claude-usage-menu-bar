@@ -63,7 +63,20 @@ public enum KeychainReader {
         var result: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
         if status == errSecItemNotFound { throw KeychainError.notFound }
-        if status == errSecInteractionNotAllowed || status == errSecInDarkWake {
+        // A silently-denied read does not always surface as the clean
+        // errSecInteractionNotAllowed / dark-wake codes. When the standing ACL grant has
+        // lapsed (rebuild/reinstall/refresh boundary) a UI-suppressed read can come back as
+        // errSecAuthFailed (-25293) — the legacy keychain's way of saying "I'd have to
+        // authenticate you and I'm not allowed to show UI." Same root cause: we lack silent
+        // access. Route it to the on-demand authorization path so the app shows
+        // `needsAuthorization` (with the "Authorize Keychain Access…" menu item) instead of
+        // the dead-end `noToken` ("Sign in to Claude Code") state. We only reinterpret it on
+        // a silent read; an interactive read returning errSecAuthFailed is a genuine
+        // wrong-password failure and authorizeNow() handles it as such.
+        let silentlyDenied = status == errSecInteractionNotAllowed
+            || status == errSecInDarkWake
+            || (!allowInteraction && status == errSecAuthFailed)
+        if silentlyDenied {
             throw KeychainError.interactionRequired
         }
         guard status == errSecSuccess else { throw KeychainError.secStatus(status) }
