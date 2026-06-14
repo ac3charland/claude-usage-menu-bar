@@ -43,6 +43,17 @@ Update Frequency, Open at Login, Quit). Hidden QA modes render design states to 
 .build/debug/Spike0cForceRefresh    # Phase 0 spike: force a refresh via injected near-expiry
 ```
 
+## Fixing issues
+
+When asked to fix an issue, log the work in `docs/fixes/`:
+
+- **Check for an existing doc first.** If one already covers this issue, **read it through
+  before making any change** — it records what was already tried and why those attempts
+  didn't stick. Don't repeat a failed approach.
+- **Append your fix to that doc** as a new numbered attempt (symptom → root cause →
+  change → why it should help → build/status). If no doc exists yet, create one
+  (`docs/fixes/<kebab-case-slug>.md`).
+
 ## Commit conventions
 
 Use [Conventional Commits](https://www.conventionalcommits.org/). Common types: `feat`, `fix`, `chore`, `refactor`, `docs`, `test`. Scope is optional. Keep the subject line under ~70 chars.
