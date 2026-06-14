@@ -12,6 +12,7 @@ final class StatusItemController: NSObject {
     /// Wired by the app delegate to reach the engine.
     var onRefreshNow: (() -> Void)?
     var onSetInterval: ((TimeInterval) -> Void)?
+    var onAuthorize: (() -> Void)?
 
     /// Icon opacity when data is degraded (stale / offline / error). Per the spec's
     /// proposal for open question 2: dim the glyph rather than change its shape.
@@ -80,6 +81,15 @@ final class StatusItemController: NSObject {
         refresh.target = self
         menu.addItem(refresh)
 
+        // Surfaced only when a silent read was denied: lets the user trigger the ONE
+        // intentional Keychain prompt on their own terms, instead of it ambushing them.
+        if currentState.status == .needsAuthorization {
+            let authorize = NSMenuItem(title: "Authorize Keychain Access…",
+                                       action: #selector(authorizeAction), keyEquivalent: "")
+            authorize.target = self
+            menu.addItem(authorize)
+        }
+
         // Poll cadence submenu.
         let intervalItem = NSMenuItem(title: "Update Frequency", action: nil, keyEquivalent: "")
         let intervalMenu = NSMenu()
@@ -115,6 +125,8 @@ final class StatusItemController: NSObject {
     }
 
     @objc private func refreshNowAction() { onRefreshNow?() }
+
+    @objc private func authorizeAction() { onAuthorize?() }
 
     @objc private func setIntervalAction(_ sender: NSMenuItem) {
         guard let seconds = sender.representedObject as? TimeInterval else { return }

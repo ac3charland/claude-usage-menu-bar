@@ -84,9 +84,14 @@ public final class UsageEngine {
 
     private func pollOnce() async {
         do {
-            let creds = try KeychainReader.read()
+            // Background polls read *silently*: if we lack standing Keychain access the read
+            // throws `.interactionRequired` instead of popping the login-password modal. The
+            // user re-grants access on their own terms via the "Authorize Keychain Access…"
+            // menu item (see `authorizeNow()`), so the prompt never ambushes them mid-work
+            // or fires uselessly in dark wake.
+            let creds = try KeychainReader.read(allowInteraction: false)
             let didRefresh = await TokenRefresher.refreshIfNeeded(currentExpiresAtMs: creds.expiresAtMs)
-            let active = didRefresh ? (try KeychainReader.read()) : creds
+            let active = didRefresh ? (try KeychainReader.read(allowInteraction: false)) : creds
 
             // The endpoint returns 429 (not 401) for an expired bearer once we've hit it
             // enough times, so a dead token silently turns into an exponential back-off
@@ -108,7 +113,7 @@ public final class UsageEngine {
             } catch UsageFetchError.unauthorized {
                 Log.warn("Got 401 from usage endpoint — forcing refresh and retrying once")
                 await TokenRefresher.forceRefresh()
-                let retried = try KeychainReader.read()
+                let retried = try KeychainReader.read(allowInteraction: false)
                 if Date(timeIntervalSince1970: retried.expiresAtMs / 1000) <= Date() {
                     Log.error("Forced refresh did not advance token expiry — treating as refreshFailed")
                     throw UsageFetchError.unauthorized
@@ -143,6 +148,13 @@ public final class UsageEngine {
             last429 = false
             Log.error("Poll failed: \(KeychainError.notFound.description)")
             publish(.noToken)
+        } catch KeychainError.interactionRequired {
+            // We deliberately declined to prompt. Don't grow the failure back-off (this is a
+            // standing condition, not a transient error to retry harder) and keep showing the
+            // last-good snapshot. The user clears it once via "Authorize Keychain Access…".
+            last429 = false
+            Log.warn("Poll skipped: silent Keychain access denied — waiting for user to authorize")
+            publish(.needsAuthorization)
         } catch let err as KeychainError {
             failures += 1
             last429 = false
@@ -178,6 +190,25 @@ public final class UsageEngine {
         let mult: Double = last429 ? 3 : 2
         let interval = baseIntervalSec * pow(mult, Double(failures))
         return min(interval, Self.maxIntervalSec)
+    }
+
+    /// User-initiated, interactive Keychain authorization. This is the ONLY path allowed to
+    /// surface the macOS login-password / "authenticity cannot be verified" prompt: it runs
+    /// only when the user explicitly picks "Authorize Keychain Access…", so the prompt is
+    /// expected rather than an ambush. On success the app has standing (silent) access again,
+    /// so we immediately poll to refresh the UI; on failure we surface the same needs-auth
+    /// state so the menu item stays available.
+    public func authorizeNow() {
+        Log.info("User requested interactive Keychain authorization")
+        do {
+            _ = try KeychainReader.read(allowInteraction: true)
+            Log.info("Interactive Keychain authorization succeeded — resuming polls")
+            failures = 0
+            refreshNow()
+        } catch {
+            Log.error("Interactive Keychain authorization failed: \(error)")
+            publish(.needsAuthorization)
+        }
     }
 
     /// Force an immediate poll by interrupting the current sleep — same mechanism as
