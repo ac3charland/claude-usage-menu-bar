@@ -215,3 +215,80 @@ The genuinely durable fix is to **stop re-reading `claude`'s item on the hot pat
 re-`claude /login`. The current design deliberately delegates refresh to `claude` to avoid
 exactly this. #5 trades the password prompt for that risk, so it needs the user's explicit
 sign-off (and a plan to keep our refresh from racing the CLI's) before implementing.
+
+---
+
+## Web research (Jun 15) — confirms the root cause, and that "durable mirror" is risky
+
+After the user reported that #4/#5 just replaced the password prompt with a *daily manual
+"Right-click → Authorize" step*, we did a proper web search. Two findings reframed everything:
+
+1. **Root cause is the writer, not our signing.** The `claude` CLI refreshes its token by
+   **deleting and recreating** the `Claude Code-credentials` item rather than updating it in
+   place. Recreating the item **wipes its ACL** — which is exactly where the "Always Allow"
+   grant lives. So every CLI token refresh (~daily) silently revokes our access, regardless
+   of how stable/trusted *our* signing identity is. This is why attempts #2/#3 could never
+   have stuck. An almost-identical project hit the same wall:
+   [CodexBar #340](https://github.com/steipete/CodexBar/issues/340) ("oauth.claude entry is
+   deleted and recreated … wipes the ACL on every token refresh"). **No macOS setting can
+   survive this** — the grant is attached to an item another program keeps destroying.
+
+2. **The "durable mirror" fix (#5) is actively dangerous here.** Anthropic's OAuth uses
+   **refresh-token rotation with invalidation**: each refresh returns a new refresh token and
+   invalidates the old one. Confirmed by Claude Code's own concurrency bugs
+   ([#25609](https://github.com/anthropics/claude-code/issues/25609),
+   [#54443](https://github.com/anthropics/claude-code/issues/54443)) where two processes
+   sharing the credentials race and one is **forced to `/login`**. A widget that refreshed on
+   its own would become a third racer and could log the user out of their real `claude` —
+   plausibly *worse* than a daily prompt. The only race-free variant is to refresh `claude`'s
+   single item **in place** (`SecItemUpdate`, never delete+recreate) and write the rotated
+   token back, which hinges on whether macOS grants silent *modify* after one "Always Allow"
+   (an untested unknown — a spike was drafted, then abandoned when the user picked #6).
+
+## Attempt #6 — stop deferring; just ask for the password when access lapses
+
+**User decision (Jun 15):** *"when the widget needs my password, it asks for it — no more of
+this 'Right click → keychain access' business."* So we deliberately **revert the #4/#5 posture**
+(silent-only background reads + a deferred authorize menu item) and let polls prompt directly.
+
+### Changes
+
+1. **`KeychainReader.read(allowInteraction:)`** — default flips to `true`. Interactive is now
+   the normal path. Added a distinct `KeychainError.userCanceled` (maps `errSecUserCanceled`)
+   so the engine can tell *"user dismissed the modal"* from *"couldn't show a modal"*
+   (`.interactionRequired`: dark wake / suppressed silent read). The silent path (`false`) is
+   retained only for the post-dismissal cooldown.
+2. **`UsageEngine.pollOnce`** — all three reads (initial, post-refresh, post-401) read with
+   `allowInteraction: mayPrompt`, where `mayPrompt` is true unless we're inside a cooldown.
+   - `.userCanceled` → set `suppressPromptUntil = now + 15min` (silent reads only during the
+     window, so we don't re-pop the modal every 2-min poll), publish `.stale`, keep last-good.
+   - `.interactionRequired` → couldn't prompt now (dark wake / cooldown silent read); publish
+     `.stale` and let the next poll prompt when the machine is awake.
+   - A successful poll **and** a manual Refresh Now both clear `suppressPromptUntil`.
+3. **Removed the deferred-auth surface entirely** — `EngineStatus.needsAuthorization`,
+   `UsageEngine.authorizeNow()`, the `onAuthorize` hook, and the *"Authorize Keychain Access…"*
+   right-click menu item. **Refresh Now** is now the user's "ask me for the password now"
+   affordance (it clears the cooldown and forces an interactive poll).
+
+### Why this is what the user wants (and its accepted cost)
+
+- When the CLI's daily refresh wipes our grant, the next poll **pops the password / Always-Allow
+  modal directly** — one click, polling resumes, no extra menu step. That is the explicit ask.
+- **Accepted cost:** the prompt can appear more than once a day if the CLI refreshes its token
+  more than once a day, and it can interrupt mid-work. The cooldown keeps a *dismissed* prompt
+  from re-popping every 2 minutes (it backs off 15 min, or until Refresh Now). Dark-wake polls
+  simply can't show the modal and quietly retry later, so they don't queue unanswerable prompts.
+- The genuinely-durable options remain #5 (mirror + self-refresh — rejected: rotation race) and
+  its in-place-`SecItemUpdate` variant (untested silent-modify unknown). #6 is the deliberate
+  "prompt me, don't defer" choice, not a claim to have eliminated the prompt.
+
+### Build / status
+
+- Removed the throwaway `Spike0dInPlaceUpdate` (the in-place-modify feasibility probe) since
+  that design was not chosen. `swift build` → **Build complete** (only the two pre-existing
+  legacy-API deprecation warnings on the `SecKeychain*` / `kSecUseAuthenticationUI` calls).
+- **Validation caveat:** the lapse only happens across a CLI refresh boundary, which can't be
+  forced in one session. After `./scripts/make-app.sh release` + relaunch, confirm that when
+  access lapses the widget shows the **password/Always-Allow modal directly** (no "Authorize"
+  menu item), that clicking **Always Allow** resumes polling, and that dismissing it backs off
+  rather than re-popping every poll.

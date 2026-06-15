@@ -26,7 +26,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             engine?.baseIntervalSec = seconds
             engine?.refreshNow()
         }
-        controller.onAuthorize = { [weak engine] in engine?.authorizeNow() }
 
         engineTask = Task { await engine.run() }
 
