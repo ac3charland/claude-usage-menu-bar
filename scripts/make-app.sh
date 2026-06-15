@@ -79,20 +79,47 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
-# Sign with the stable self-signed identity so the app has ONE constant code identity
-# across rebuilds. This is what makes the Keychain "Always Allow" for the
-# Claude Code-credentials read persist instead of re-prompting after every build.
-# (The cert hash → designated requirement is stable; see scripts/make-signing-cert.sh.)
-# Falls back to ad-hoc signing with a warning if the identity isn't installed yet.
-SIGN_CN="Claude Usage Self-Signed"
-if security find-certificate -c "$SIGN_CN" >/dev/null 2>&1; then
-    echo ">> Signing bundle with \"$SIGN_CN\" ..."
-    codesign --force --deep --sign "$SIGN_CN" --identifier "$BUNDLE_ID" "$APP_DIR"
+# Signing identity, in order of preference:
+#
+#   1. Apple Developer ID Application (Oddobot team). A real Apple-issued cert carries a
+#      Team Identifier and chains to Apple's trusted root, so macOS can *verify* the app.
+#      That downgrades the cross-app Keychain prompt from "type your login password" to a
+#      one-click "Always Allow" (no password). We match the Oddobot team ID specifically so
+#      an unrelated Developer ID in the keychain (e.g. another org) is never picked.
+#   2. The stable self-signed cert. Gives ONE constant code identity across rebuilds (so a
+#      grant isn't invalidated every build) but, lacking a Team Identifier, still forces the
+#      heavier password prompt. See scripts/make-signing-cert.sh.
+#   3. Ad-hoc (last resort) — identity changes every build, so the prompt always returns.
+#
+# NOTE: even with the Developer ID, the prompt still *recurs* (~daily): the `claude` CLI
+# recreates its Keychain item on each token refresh, wiping the ACL grant. Developer ID
+# makes each re-grant a single password-free click, it does not eliminate the prompt.
+#
+# Override the auto-pick with CODESIGN_IDENTITY="..." (any value `codesign --sign` accepts).
+DEVID_TEAM="8WTQW8TNRJ"          # Oddobot Solutions, LLC
+SELFSIGN_CN="Claude Usage Self-Signed"
+DEVID_HASH="$(security find-identity -v -p codesigning 2>/dev/null \
+    | grep "Developer ID Application" | grep "$DEVID_TEAM" | head -1 | awk '{print $2}')"
+
+sign_with() {  # $1 = identity (hash or name), $2 = human description
+    echo ">> Signing bundle with $2 ..."
+    codesign --force --deep --sign "$1" --identifier "$BUNDLE_ID" "$APP_DIR"
     codesign -v --verbose=2 "$APP_DIR" 2>&1 | sed 's/^/   /'
-    echo "OK  Signed with stable identity"
+}
+
+if [ -n "${CODESIGN_IDENTITY:-}" ]; then
+    sign_with "$CODESIGN_IDENTITY" "override identity \"$CODESIGN_IDENTITY\""
+    echo "OK  Signed with CODESIGN_IDENTITY override"
+elif [ -n "$DEVID_HASH" ]; then
+    sign_with "$DEVID_HASH" "Developer ID Application (Oddobot, $DEVID_TEAM)"
+    echo "OK  Signed with Developer ID — the Keychain prompt should now be a one-click"
+    echo "    \"Always Allow\" with no password (though it can still recur on CLI refresh)."
+elif security find-certificate -c "$SELFSIGN_CN" >/dev/null 2>&1; then
+    sign_with "$SELFSIGN_CN" "stable self-signed identity \"$SELFSIGN_CN\""
+    echo "OK  Signed with stable self-signed identity (password prompt; no Developer ID found)"
 else
-    echo ">> Signing identity \"$SIGN_CN\" not found — ad-hoc signing instead." >&2
-    echo "   Run scripts/make-signing-cert.sh once to stop the repeated Keychain prompts." >&2
+    echo ">> No signing identity found — ad-hoc signing instead." >&2
+    echo "   Install the Oddobot Developer ID, or run scripts/make-signing-cert.sh." >&2
     codesign --force --deep --sign - --identifier "$BUNDLE_ID" "$APP_DIR"
 fi
 

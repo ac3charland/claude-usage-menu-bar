@@ -292,3 +292,45 @@ this 'Right click → keychain access' business."* So we deliberately **revert t
   access lapses the widget shows the **password/Always-Allow modal directly** (no "Authorize"
   menu item), that clicking **Always Allow** resumes polling, and that dismissing it backs off
   rather than re-popping every poll.
+
+## Attempt #7 — sign with an Apple Developer ID so the prompt drops the password
+
+**Follow-on to #6.** #6 made the widget ask for the password when it needs it, but the user
+asked whether the prompt could at least skip the password (ideally Touch ID). Research
+clarified the mechanics:
+
+- **Touch ID is not available for this dialog.** It only applies to keychain items created
+  with biometric access control (`kSecAccessControl` + `LAContext`) — items *our* app owns —
+  not to the cross-app ACL prompt for reading `claude`'s item.
+- **But the password itself is avoidable.** macOS forces the *password* variant of the prompt
+  only for apps it **can't verify**. A *verified* app (signature chains to Apple's trusted
+  root, carries a Team Identifier) gets the lighter **one-click "Always Allow"** with no
+  password and no Touch ID. The self-signed cert from #2/#3 is locally trusted for code
+  signing but has **no Team Identifier** and is Gatekeeper-`rejected` — exactly the case the
+  keychain's "is this verified?" check won't honor, so it stays on the password variant.
+
+### Change
+
+- `scripts/make-app.sh` now prefers an **Apple Developer ID Application** cert (Oddobot team,
+  `8WTQW8TNRJ`), matched by team id so an unrelated Developer ID is never picked. Falls back
+  to the self-signed cert, then ad-hoc. `CODESIGN_IDENTITY=…` overrides the auto-pick.
+- Installed bundle now verifies: `Authority=Developer ID Application: Oddobot Solutions, LLC`
+  → `Developer ID Certification Authority` → `Apple Root CA`, `TeamIdentifier=8WTQW8TNRJ`,
+  `codesign --verify --deep --strict` passes.
+
+### Why this helps (and what it does NOT fix)
+
+- The cross-app prompt should now be a **password-free one-click "Always Allow"** — the
+  friction reduction the user wanted, and better than Touch ID (zero auth, one click).
+- It does **not** reduce *frequency*: the `claude` CLI still recreates its item on each token
+  refresh (~daily), wiping the grant. So the one-click prompt still recurs about daily. This
+  is the documented platform limitation, not a regression. (Notarization is unrelated — it
+  clears Gatekeeper launch on *other* Macs; the keychain benefit comes from Developer ID
+  signing alone.)
+
+### Build / status
+
+- `./scripts/make-app.sh release` → signed with the Developer ID, installed, relaunched.
+- **Validation caveat:** switching signing identity invalidates the prior self-signed grant,
+  so the *next* read prompts once more — and that prompt is the test: it should now be the
+  **click-only "Always Allow" (no password field)**. Confirm on the next lapse.
