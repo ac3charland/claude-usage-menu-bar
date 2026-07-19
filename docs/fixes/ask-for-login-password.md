@@ -334,3 +334,77 @@ clarified the mechanics:
 - **Validation caveat:** switching signing identity invalidates the prior self-signed grant,
   so the *next* read prompts once more — and that prompt is the test: it should now be the
   **click-only "Always Allow" (no password field)**. Confirm on the next lapse.
+
+## Attempt #8 — probe expiry silently so the CLI ping can't sit between two prompts
+
+**New symptom (Jul 19):** the prompt now comes up **twice in a row**. Not the frequency issue
+from #7 — two back-to-back modals in a single refresh.
+
+### Root cause (confirmed from the log)
+
+A poll did **read → CLI ping → read** (`pollOnce`, old lines 101–103), and the ping is exactly
+what wipes the grant (the `claude` CLI deletes+recreates its Keychain item on refresh — the
+writer-side wipe established in the Jun 15 research above). So when a poll *both* found the grant
+already lapsed *and* needed a refresh, the sequence was two prompts:
+
+1. **read #1** prompts (grant lapsed) → user authorizes → grant restored;
+2. **CLI ping** recreates the item → **wipes the grant we just restored**;
+3. **read #2** prompts *again* → user authorizes.
+
+The 30-min `refreshMarginMinutes` makes "grant lapsed **and** near expiry" the routine boundary,
+not an edge case — especially after the machine sleeps through a full token cycle. The log shows
+it plainly around a wake:
+
+```
+08:10:39 CLI ping exited code=0                    ← ping recreated the item → WIPED our grant
+08:10:39 Poll skipped: could not show prompt now   ← read #2 in dark wake; grant left wiped
+   …asleep until 16:24, grant stays wiped…
+16:24:17 Token expires in -13min — refreshing      ← read #1 at wake: grant wiped → PROMPT #1
+16:24:20 CLI ping exited code=0                     ← ping recreates item → WIPES the just-restored grant
+   (36s gap = user answering the 2nd modal)
+16:24:56 Snapshot: … success                        ← read #2 → PROMPT #2 → fetch
+```
+
+### Change — `Sources/ClaudeUsageCore/UsageEngine.swift`
+
+Never do an interactive read *before* a ping; only the read *after* any ping may prompt.
+
+- **Silent probe first.** `pollOnce` now opens with `try? KeychainReader.read(allowInteraction:
+  false)`. A silent read can't show a modal, so it can never be the first of two prompts — its
+  only job is to learn the token expiry when our grant is intact.
+  - **Probe succeeds (grant intact):** refresh only if near expiry; the post-refresh read is the
+    *only* interactive one. One prompt max, and only when a refresh actually happened.
+  - **Probe denied (grant lapsed):** a lapsed grant only happens because a refresh just recreated
+    the item, so refresh **first** — using `lastKnownExpiryMs`, the expiry from the last good
+    read — then do exactly **one** interactive read. The grant-wiping ping now lands *before* the
+    single prompt, never between two.
+- **New `lastKnownExpiryMs`** on the engine, updated after every successful read (incl. the 401
+  retry). It lets the denied branch decide "refresh?" without an interactive read. It's in-memory
+  only, which is enough for the important case (the app runs continuously through a sleep, so the
+  overnight 16:24 double is covered). `refreshIfNeeded`'s existing 10-min ping cooldown (keyed on
+  the same expiry value) still prevents redundant `claude` spawns.
+
+Net keychain-read count is unchanged in every path (intact+no-refresh = 1, intact+refresh = 2,
+lapsed = 1 successful); the difference is purely *which* read is allowed to prompt.
+
+### Why this fixes it
+
+- The only read that can ever prompt is the one **after** the ping. Since it's a single read, the
+  user is asked **at most once** per poll, in every combination of (grant lapsed?) × (near expiry?).
+- Dark-wake / cooldown behavior is preserved: the interactive read still honors `mayPrompt`, so a
+  suppressed read throws `.interactionRequired` and the poll degrades to `.stale` exactly as before.
+- Composes with #7: the single remaining prompt is still the password-free one-click "Always Allow"
+  on a Developer-ID build. This attempt removes the *doubling*; #7 removed the *password field*;
+  the ~daily *frequency* is still the documented writer-side platform limit (durable removal remains
+  the rejected mirror/self-refresh, #5).
+
+### Build / status
+
+- `swift build` → **Build complete** (only the two pre-existing legacy-API deprecation warnings on
+  the `SecKeychain*` / `kSecUseAuthenticationUI` calls in `KeychainReader`).
+- **Validation caveat (same class as before):** the double only appears across a lapse+refresh
+  boundary, which can't be forced in one session. After `./scripts/make-app.sh release` + relaunch,
+  confirm that at the next refresh boundary the widget shows the "Always Allow" modal **once**, not
+  twice, and polling resumes. Cold-start edge: a fresh launch straight into a lapsed **and** already
+  re-expired token has no `lastKnownExpiryMs` yet, so it can still prompt twice on that first poll;
+  it self-heals next cycle. Persisting expiry to disk would close even that, if it recurs.

@@ -40,6 +40,13 @@ public final class UsageEngine {
     /// How long to stay quiet after a dismissed prompt.
     private static let promptCooldownSec: TimeInterval = 15 * 60
 
+    /// The token expiry (ms since epoch) from the most recent successful Keychain read.
+    /// Used to decide whether a refresh is needed *without* an interactive read: when our
+    /// ACL grant has lapsed we can't silently see the current expiry, but the last one we
+    /// saw is enough to know whether to refresh before the single prompting read. See the
+    /// "asks twice" reasoning in `pollOnce`.
+    private var lastKnownExpiryMs: Double?
+
     /// Current published state. The UI observes `onState`.
     public private(set) var state: EngineState = .empty
     /// Called on the main actor whenever `state` changes.
@@ -98,9 +105,34 @@ public final class UsageEngine {
         // re-pop the modal on every 2-minute poll.
         let mayPrompt = suppressPromptUntil.map { Date() >= $0 } ?? true
         do {
-            let creds = try KeychainReader.read(allowInteraction: mayPrompt)
-            let didRefresh = await TokenRefresher.refreshIfNeeded(currentExpiresAtMs: creds.expiresAtMs)
-            let active = didRefresh ? (try KeychainReader.read(allowInteraction: mayPrompt)) : creds
+            // Show the login-password / Always Allow modal *at most once* per poll. The
+            // `claude` CLI recreates its Keychain item on every token refresh, which wipes
+            // our cross-app ACL grant — so any read after a refresh needs re-authorizing.
+            // The trap that made the widget "ask twice" was: interactive read → grant-wiping
+            // CLI ping → interactive read, i.e. a ping sitting *between* two prompts (both
+            // fire when the grant was already lapsed and the token is near expiry). We avoid
+            // it by never doing an interactive read before a ping: a *silent* probe learns
+            // the expiry, and only the read *after* any ping is allowed to prompt.
+            let active: OAuthCredentials
+            if let probe = try? KeychainReader.read(allowInteraction: false) {
+                // Grant intact — the silent probe gave us the expiry for free. Refresh only
+                // if near expiry, and only the post-refresh read may prompt (the ping is what
+                // wipes the grant, so an interactive read is only ever needed *after* it).
+                lastKnownExpiryMs = probe.expiresAtMs
+                let didRefresh = await TokenRefresher.refreshIfNeeded(currentExpiresAtMs: probe.expiresAtMs)
+                active = didRefresh ? (try KeychainReader.read(allowInteraction: mayPrompt)) : probe
+            } else {
+                // Silent probe denied → our grant has lapsed, which only happens right after a
+                // refresh recreated the item. Refresh FIRST (using the last expiry we saw, so
+                // the ping cooldown still applies and a fresh token skips the ping), THEN do
+                // exactly one interactive read. The grant-wiping ping now happens *before* the
+                // single prompt, never between two — so the user is asked at most once.
+                if let lastExpiry = lastKnownExpiryMs {
+                    await TokenRefresher.refreshIfNeeded(currentExpiresAtMs: lastExpiry)
+                }
+                active = try KeychainReader.read(allowInteraction: mayPrompt)
+            }
+            lastKnownExpiryMs = active.expiresAtMs
 
             // The endpoint returns 429 (not 401) for an expired bearer once we've hit it
             // enough times, so a dead token silently turns into an exponential back-off
@@ -123,6 +155,7 @@ public final class UsageEngine {
                 Log.warn("Got 401 from usage endpoint — forcing refresh and retrying once")
                 await TokenRefresher.forceRefresh()
                 let retried = try KeychainReader.read(allowInteraction: mayPrompt)
+                lastKnownExpiryMs = retried.expiresAtMs
                 if Date(timeIntervalSince1970: retried.expiresAtMs / 1000) <= Date() {
                     Log.error("Forced refresh did not advance token expiry — treating as refreshFailed")
                     throw UsageFetchError.unauthorized
