@@ -71,7 +71,8 @@ public enum TokenRefresher {
         }
         proc.environment = env
         proc.standardOutput = Pipe()
-        proc.standardError = Pipe()
+        let stderrPipe = Pipe()
+        proc.standardError = stderrPipe
 
         let started = Date()
         do {
@@ -96,10 +97,16 @@ public enum TokenRefresher {
         if code == 0 {
             Log.info("CLI ping exited code=0 after \(String(format: "%.1f", elapsed))s")
         } else {
-            // Most common cause in practice: the keychain entry has an empty refreshToken,
-            // so the CLI can't swap it and exits non-zero. Surface this loudly — the engine
-            // will also detect the unchanged expiry and route to .refreshFailed.
-            Log.warn("CLI ping exited code=\(code) after \(String(format: "%.1f", elapsed))s — token likely not refreshed")
+            // Most common causes in practice: the keychain entry has an empty refreshToken,
+            // or the refresh token itself was rejected server-side (session revoked/expired —
+            // the CLI prints "OAuth session expired and could not be refreshed" and only a
+            // fresh `claude /login` fixes it). Surface stderr so this doesn't take a manual
+            // repro to diagnose — the engine will also detect the unchanged expiry and route
+            // to .refreshFailed.
+            let stderrText = String(data: stderrPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let detail = (stderrText?.isEmpty == false) ? " — \(stderrText!)" : ""
+            Log.warn("CLI ping exited code=\(code) after \(String(format: "%.1f", elapsed))s — token likely not refreshed\(detail)")
         }
     }
 
