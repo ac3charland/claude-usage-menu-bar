@@ -408,3 +408,82 @@ lapsed = 1 successful); the difference is purely *which* read is allowed to prom
   twice, and polling resumes. Cold-start edge: a fresh launch straight into a lapsed **and** already
   re-expired token has no `lastKnownExpiryMs` yet, so it can still prompt twice on that first poll;
   it self-heals next cycle. Persisting expiry to disk would close even that, if it recurs.
+
+## Attempt #9 — read via `/usr/bin/security` so the read never triggers the ACL at all
+
+**Reframe:** every prior attempt (self-signed cert #2/#3, Developer ID #7, background-prompt
+avoidance #4/#6/#8) tried to make *this app's* standing grant on the item's ACL either durable
+or invisible. None can survive the writer-side wipe: the `claude` CLI deletes+recreates the
+item on each refresh (~daily), and a recreated item carries none of our grants.
+
+### Root cause recap
+
+The `claude` CLI doesn't write `Claude Code-credentials` through the Security framework — it
+shells out to `/usr/bin/security`. That path stamps the new item's keychain **partition list**
+with `apple-tool:`, meaning *only Apple-signed command-line tools* may read the secret silently.
+securityd evaluates the partition/ACL check against **the process making the Security-framework
+call** — its code identity. When that process is our app (`SecItemCopyMatching` from
+`KeychainReader`), it fails the `apple-tool:` check and securityd falls back to the interactive
+"enter your login password / Always Allow" modal. "Always Allow" writes a grant onto the item,
+but the next refresh recreates the item and the grant is gone. No grant to this app can survive.
+
+### The change — `Sources/ClaudeUsageCore/KeychainReader.swift`
+
+Make the primary read spawn the Apple-signed `security` binary instead of calling the framework
+ourselves:
+
+- New private `readViaSecurityCLI()` runs `/usr/bin/security find-generic-password -s "Claude
+  Code-credentials" -w` (absolute path, no PATH lookup). Stdout/stderr are drained on background
+  queues; a ~10s hard timeout mirrors `TokenRefresher.spawnPing` (terminate → throw on overrun).
+  Exit-code mapping: `0` → trim the trailing newline and decode with the existing `Envelope`
+  (`claudeAiOauth.{accessToken,refreshToken,expiresAt}`); `44` (`errSecItemNotFound`) →
+  `.notFound`; any other nonzero or a timeout → a distinguishable `CLIReadError` so the caller
+  can fall back. If stdout is JSON but has no `claudeAiOauth` key, it logs a distinct
+  "Claude Code changed its credential storage format" line before throwing `.malformedPayload`.
+- `read(allowInteraction:)` now tries `readViaSecurityCLI()` first. On success it returns; on
+  `.notFound` it rethrows (the fallback would only re-derive the same answer, and could re-pop the
+  prompt). On any other CLI-path failure it drops through to the **unchanged** `SecItemCopyMatching`
+  implementation — same `allowInteraction` plumbing, same error taxonomy
+  (`notFound`/`interactionRequired`/`userCanceled`/`secStatus`/`malformedPayload`), so
+  `UsageEngine` needs no changes.
+- Logs at info which path served a successful read ("security CLI" vs "Security.framework
+  fallback") on first success and whenever the path changes — the breadcrumb for spotting a
+  future silent regression to the prompting fallback.
+
+### Why this works
+
+securityd evaluates access against the process calling the Security framework — here the
+Apple-signed `security` binary, which *matches* the item's `apple-tool:` partition list and is
+its creator (the CLI writes it via the same binary). So the read is silent regardless of our
+app's code identity, and — because it depends on nothing stored *on* the item — it survives
+every token refresh, rebuild, and reinstall. The framework path is retained only as the degraded
+fallback for the (unexpected) case where the CLI route ever stops being silent; that path still
+carries all the `allowInteraction` / prompt-cooldown behavior from #4/#6/#8.
+
+### Build / status
+
+- Implemented on Linux (no macOS toolchain in this environment), so `swift build` /
+  `./scripts/make-app.sh release` were **not** run here — the code is written to compile clean
+  apart from the two pre-existing legacy-API deprecation warnings on the `SecKeychain*` /
+  `kSecUseAuthenticationUI` calls that remain in the fallback path.
+- Purity check holds: `grep -rn "SecItemCopyMatching\|SecKeychain" Sources/` matches only inside
+  `KeychainReader`'s fallback path (plus comments/error strings) — no other Security-framework
+  query against the item exists to re-introduce the prompt.
+
+### Validation caveat
+
+Two steps must be run on the Mac before trusting this:
+
+1. **Precondition gate (Step 0 of the spec):**
+   ```sh
+   security find-generic-password -s "Claude Code-credentials" -w \
+     | python3 -c "import sys,json; print(sorted(json.load(sys.stdin)))"
+   ```
+   Proceed only if **no dialog appears** and the output includes `claudeAiOauth`. A dialog → the
+   CLI route isn't silent on this machine. Keys without `claudeAiOauth` → Claude Code moved its
+   OAuth credentials and this fix targets the wrong payload.
+2. After `./scripts/make-app.sh release` + relaunch, confirm the log shows a successful
+   **"security CLI"** read and no macOS dialog. As with every prior attempt, the old prompt only
+   fired across a token-refresh boundary, which can't be forced in one session — confirm over
+   ~a day of normal use (including at least one CLI-ping refresh in the log) that no keychain
+   dialog appears.
