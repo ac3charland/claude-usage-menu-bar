@@ -46,13 +46,16 @@ public struct UsageResponse: Decodable {
         case limits
     }
 
-    /// The weekly Fable cap, reconstructed as a `UsageWindow` so it flows through the same
-    /// window math as `seven_day`. Nil when the API doesn't report a Fable limit.
-    public var fableWeekly: UsageWindow? {
-        guard let entry = limits?.first(where: {
-            $0.group == "weekly" && $0.scope?.model?.displayName == "Fable"
-        }), let pct = entry.percent else { return nil }
-        return UsageWindow(utilization: pct, resetsAt: entry.resetsAt)
+    /// The per-model weekly caps the endpoint reports as `weekly_scoped` entries in `limits`,
+    /// each reconstructed as a `UsageWindow` so it flows through the same window math as
+    /// `seven_day`. Order is preserved from the API. Empty when no per-model caps are reported.
+    public var weeklyModelLimits: [(name: String, window: UsageWindow)] {
+        (limits ?? []).compactMap { entry in
+            guard entry.group == "weekly", entry.kind == "weekly_scoped",
+                  let name = entry.scope?.model?.displayName, !name.isEmpty,
+                  let pct = entry.percent else { return nil }
+            return (name, UsageWindow(utilization: pct, resetsAt: entry.resetsAt))
+        }
     }
 }
 

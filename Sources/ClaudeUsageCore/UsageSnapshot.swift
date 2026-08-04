@@ -4,11 +4,12 @@ public struct UsageSnapshot: Codable {
     public let capturedAt: Date
     public let session: WindowState?
     public let weekly: WindowState?
-    /// Weekly per-model cap for Fable, shaped like `weekly` (same 7-day window + pace math).
-    /// Nil when the API doesn't report a Fable limit.
-    public let fable: WindowState?
+    /// Per-model weekly caps (e.g. Fable), each shaped like `weekly` (same 7-day window +
+    /// pace math) and labeled by the model's display name. Rendered dynamically: whatever the
+    /// API reports, in order. Empty when the API reports no per-model caps.
+    public let weeklyModels: [WeeklyModel]
 
-    public struct WindowState: Codable {
+    public struct WindowState: Codable, Equatable {
         public let utilizationPct: Double
         /// Nil when the window is empty/fully reset and the API reports no reset time.
         public let resetsAt: Date?
@@ -23,11 +24,36 @@ public struct UsageSnapshot: Codable {
         }
     }
 
-    public init(capturedAt: Date, session: WindowState?, weekly: WindowState?, fable: WindowState? = nil) {
+    /// A named weekly per-model window (label + its pace-aware state).
+    public struct WeeklyModel: Codable, Equatable {
+        public let label: String
+        public let state: WindowState
+
+        public init(label: String, state: WindowState) {
+            self.label = label
+            self.state = state
+        }
+    }
+
+    public init(capturedAt: Date, session: WindowState?, weekly: WindowState?, weeklyModels: [WeeklyModel] = []) {
         self.capturedAt = capturedAt
         self.session = session
         self.weekly = weekly
-        self.fable = fable
+        self.weeklyModels = weeklyModels
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case capturedAt, session, weekly, weeklyModels
+    }
+
+    // Custom decode so snapshots cached before `weeklyModels` existed still load (missing key
+    // → empty list) rather than failing the whole read and forcing a cold first paint.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        capturedAt = try c.decode(Date.self, forKey: .capturedAt)
+        session = try c.decodeIfPresent(WindowState.self, forKey: .session)
+        weekly = try c.decodeIfPresent(WindowState.self, forKey: .weekly)
+        weeklyModels = try c.decodeIfPresent([WeeklyModel].self, forKey: .weeklyModels) ?? []
     }
 
     /// 5-hour session window length.
@@ -40,7 +66,9 @@ public struct UsageSnapshot: Codable {
             capturedAt: now,
             session: response.fiveHour.map { compute(window: $0, lengthSec: sessionWindowSec, now: now) },
             weekly: response.sevenDay.map { compute(window: $0, lengthSec: weeklyWindowSec, now: now) },
-            fable: response.fableWeekly.map { compute(window: $0, lengthSec: weeklyWindowSec, now: now) }
+            weeklyModels: response.weeklyModelLimits.map {
+                WeeklyModel(label: $0.name, state: compute(window: $0.window, lengthSec: weeklyWindowSec, now: now))
+            }
         )
     }
 
@@ -70,6 +98,8 @@ public struct UsageSnapshot: Codable {
             let mark = w.isAhead ? "↑ahead" : "·on-pace"
             return "\(label)=\(String(format: "%.1f", w.utilizationPct))% (elapsed \(String(format: "%.1f", w.elapsedFraction * 100))% \(mark))"
         }
-        return "\(describe(session, "session"))  \(describe(weekly, "weekly"))  \(describe(fable, "fable"))"
+        var parts = [describe(session, "session"), describe(weekly, "weekly")]
+        parts += weeklyModels.map { describe($0.state, $0.label.lowercased()) }
+        return parts.joined(separator: "  ")
     }
 }
