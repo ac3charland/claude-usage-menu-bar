@@ -11,6 +11,11 @@ let package = Package(
     ],
     targets: [
         .target(name: "ClaudeUsageCore", path: "Sources/ClaudeUsageCore"),
+        .testTarget(
+            name: "ClaudeUsageCoreTests",
+            dependencies: ["ClaudeUsageCore"],
+            path: "Tests/ClaudeUsageCoreTests"
+        ),
         .executableTarget(
             name: "ClaudeUsageDaemon",
             dependencies: ["ClaudeUsageCore"],

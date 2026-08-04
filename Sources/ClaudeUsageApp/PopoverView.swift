@@ -5,6 +5,10 @@ import ClaudeUsageCore
 struct PopoverModel: Equatable {
     var sessionPct: Double?
     var sessionResetsAt: Date?
+    var fablePct: Double?
+    var fableResetsAt: Date?
+    var fableElapsed: Double
+    var fableAhead: Bool
     var weeklyPct: Double?
     var weeklyResetsAt: Date?
     var weeklyElapsed: Double
@@ -14,6 +18,10 @@ struct PopoverModel: Equatable {
     init(_ state: EngineState) {
         sessionPct = state.snapshot?.session?.utilizationPct
         sessionResetsAt = state.snapshot?.session?.resetsAt
+        fablePct = state.snapshot?.fable?.utilizationPct
+        fableResetsAt = state.snapshot?.fable?.resetsAt
+        fableElapsed = state.snapshot?.fable?.elapsedFraction ?? 0
+        fableAhead = state.snapshot?.fable?.isAhead ?? false
         weeklyPct = state.snapshot?.weekly?.utilizationPct
         weeklyResetsAt = state.snapshot?.weekly?.resetsAt
         weeklyElapsed = state.snapshot?.weekly?.elapsedFraction ?? 0
@@ -55,10 +63,21 @@ struct PopoverView: View {
             footer: { SessionFootnote(resetsAt: model.sessionResetsAt) }
         )
 
-        Divider()
-            .frame(height: 1)
-            .overlay(Color.white.opacity(0.08))
-            .padding(.vertical, 14)
+        sectionDivider
+
+        // Fable — a weekly per-model cap; same solid/hollow pace language as Weekly. Only
+        // shown when the API reports a Fable limit. Sits above Weekly per the design.
+        if model.fablePct != nil {
+            ProgressRow(
+                label: "Fable",
+                pct: (model.fablePct ?? 0) / 100,
+                ahead: model.fableAhead,
+                paceMark: model.fableElapsed,
+                footer: { PaceFootnote(ahead: model.fableAhead, resetsAt: model.fableResetsAt) }
+            )
+
+            sectionDivider
+        }
 
         // Weekly — solid when on pace, hollow when ahead; pace mark at elapsed fraction.
         ProgressRow(
@@ -72,6 +91,13 @@ struct PopoverView: View {
         if let reason = model.reason {
             reasonLine(reason)
         }
+    }
+
+    private var sectionDivider: some View {
+        Divider()
+            .frame(height: 1)
+            .overlay(Color.white.opacity(0.08))
+            .padding(.vertical, 14)
     }
 
     @ViewBuilder private var emptyState: some View {

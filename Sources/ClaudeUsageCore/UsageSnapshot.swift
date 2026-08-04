@@ -4,6 +4,9 @@ public struct UsageSnapshot: Codable {
     public let capturedAt: Date
     public let session: WindowState?
     public let weekly: WindowState?
+    /// Weekly per-model cap for Fable, shaped like `weekly` (same 7-day window + pace math).
+    /// Nil when the API doesn't report a Fable limit.
+    public let fable: WindowState?
 
     public struct WindowState: Codable {
         public let utilizationPct: Double
@@ -20,10 +23,11 @@ public struct UsageSnapshot: Codable {
         }
     }
 
-    public init(capturedAt: Date, session: WindowState?, weekly: WindowState?) {
+    public init(capturedAt: Date, session: WindowState?, weekly: WindowState?, fable: WindowState? = nil) {
         self.capturedAt = capturedAt
         self.session = session
         self.weekly = weekly
+        self.fable = fable
     }
 
     /// 5-hour session window length.
@@ -35,7 +39,8 @@ public struct UsageSnapshot: Codable {
         return UsageSnapshot(
             capturedAt: now,
             session: response.fiveHour.map { compute(window: $0, lengthSec: sessionWindowSec, now: now) },
-            weekly: response.sevenDay.map { compute(window: $0, lengthSec: weeklyWindowSec, now: now) }
+            weekly: response.sevenDay.map { compute(window: $0, lengthSec: weeklyWindowSec, now: now) },
+            fable: response.fableWeekly.map { compute(window: $0, lengthSec: weeklyWindowSec, now: now) }
         )
     }
 
@@ -65,6 +70,6 @@ public struct UsageSnapshot: Codable {
             let mark = w.isAhead ? "↑ahead" : "·on-pace"
             return "\(label)=\(String(format: "%.1f", w.utilizationPct))% (elapsed \(String(format: "%.1f", w.elapsedFraction * 100))% \(mark))"
         }
-        return "\(describe(session, "session"))  \(describe(weekly, "weekly"))"
+        return "\(describe(session, "session"))  \(describe(weekly, "weekly"))  \(describe(fable, "fable"))"
     }
 }
