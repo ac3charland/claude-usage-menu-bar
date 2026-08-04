@@ -5,15 +5,30 @@ import ClaudeUsageCore
 struct PopoverModel: Equatable {
     var sessionPct: Double?
     var sessionResetsAt: Date?
+    var weeklyModels: [WeeklyModelRow]
     var weeklyPct: Double?
     var weeklyResetsAt: Date?
     var weeklyElapsed: Double
     var weeklyAhead: Bool
     var reason: String?
 
+    /// A per-model weekly row, flattened out of the snapshot so SwiftUI stays decoupled from
+    /// the engine types (mirrors how the session/weekly fields are flattened above).
+    struct WeeklyModelRow: Equatable {
+        var label: String
+        var pct: Double
+        var resetsAt: Date?
+        var elapsed: Double
+        var ahead: Bool
+    }
+
     init(_ state: EngineState) {
         sessionPct = state.snapshot?.session?.utilizationPct
         sessionResetsAt = state.snapshot?.session?.resetsAt
+        weeklyModels = (state.snapshot?.weeklyModels ?? []).map {
+            WeeklyModelRow(label: $0.label, pct: $0.state.utilizationPct, resetsAt: $0.state.resetsAt,
+                           elapsed: $0.state.elapsedFraction, ahead: $0.state.isAhead)
+        }
         weeklyPct = state.snapshot?.weekly?.utilizationPct
         weeklyResetsAt = state.snapshot?.weekly?.resetsAt
         weeklyElapsed = state.snapshot?.weekly?.elapsedFraction ?? 0
@@ -55,10 +70,22 @@ struct PopoverView: View {
             footer: { SessionFootnote(resetsAt: model.sessionResetsAt) }
         )
 
-        Divider()
-            .frame(height: 1)
-            .overlay(Color.white.opacity(0.08))
-            .padding(.vertical, 14)
+        sectionDivider
+
+        // Per-model weekly caps (e.g. Fable) — one row each, in the order the API reports
+        // them, above the overall Weekly row. Same solid/hollow pace language as Weekly. None
+        // reported → nothing renders here and the panel is just Session + Weekly.
+        ForEach(model.weeklyModels, id: \.label) { m in
+            ProgressRow(
+                label: m.label,
+                pct: m.pct / 100,
+                ahead: m.ahead,
+                paceMark: m.elapsed,
+                footer: { PaceFootnote(ahead: m.ahead, resetsAt: m.resetsAt) }
+            )
+
+            sectionDivider
+        }
 
         // Weekly — solid when on pace, hollow when ahead; pace mark at elapsed fraction.
         ProgressRow(
@@ -72,6 +99,13 @@ struct PopoverView: View {
         if let reason = model.reason {
             reasonLine(reason)
         }
+    }
+
+    private var sectionDivider: some View {
+        Divider()
+            .frame(height: 1)
+            .overlay(Color.white.opacity(0.08))
+            .padding(.vertical, 14)
     }
 
     @ViewBuilder private var emptyState: some View {

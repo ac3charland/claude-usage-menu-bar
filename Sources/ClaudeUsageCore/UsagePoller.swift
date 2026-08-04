@@ -12,12 +12,50 @@ public struct UsageWindow: Decodable {
     }
 }
 
+/// One entry of the response's `limits` array. Per-model weekly caps (e.g. Fable) live
+/// here as `weekly_scoped` entries tagged with the model in `scope.model.display_name`;
+/// they are not surfaced as top-level windows like `five_hour` / `seven_day`.
+public struct UsageLimit: Decodable {
+    public let kind: String?
+    public let group: String?
+    public let percent: Double?
+    public let resetsAt: Date?
+    public let scope: Scope?
+
+    public struct Scope: Decodable {
+        public let model: Model?
+        public struct Model: Decodable {
+            public let displayName: String?
+            enum CodingKeys: String, CodingKey { case displayName = "display_name" }
+        }
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case kind, group, percent, scope
+        case resetsAt = "resets_at"
+    }
+}
+
 public struct UsageResponse: Decodable {
     public let fiveHour: UsageWindow?
     public let sevenDay: UsageWindow?
+    public let limits: [UsageLimit]?
     enum CodingKeys: String, CodingKey {
         case fiveHour = "five_hour"
         case sevenDay = "seven_day"
+        case limits
+    }
+
+    /// The per-model weekly caps the endpoint reports as `weekly_scoped` entries in `limits`,
+    /// each reconstructed as a `UsageWindow` so it flows through the same window math as
+    /// `seven_day`. Order is preserved from the API. Empty when no per-model caps are reported.
+    public var weeklyModelLimits: [(name: String, window: UsageWindow)] {
+        (limits ?? []).compactMap { entry in
+            guard entry.group == "weekly", entry.kind == "weekly_scoped",
+                  let name = entry.scope?.model?.displayName, !name.isEmpty,
+                  let pct = entry.percent else { return nil }
+            return (name, UsageWindow(utilization: pct, resetsAt: entry.resetsAt))
+        }
     }
 }
 
@@ -92,6 +130,16 @@ public enum UsagePoller {
             throw UsageFetchError.errorEnvelope(type: err.type ?? "?", message: err.message ?? "?")
         }
 
+        do {
+            return try decodeResponse(from: data)
+        } catch {
+            throw UsageFetchError.decode(error, body: bodyStr)
+        }
+    }
+
+    /// Decodes the usage payload with the endpoint's ISO-8601 date handling. Split out from
+    /// `fetch` so the response shape (incl. per-model limits) can be unit-tested offline.
+    public static func decodeResponse(from data: Data) throws -> UsageResponse {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .custom { dec in
             let str = try dec.singleValueContainer().decode(String.self)
@@ -102,11 +150,7 @@ public enum UsagePoller {
             if let d = f.date(from: str) { return d }
             throw DecodingError.dataCorrupted(.init(codingPath: dec.codingPath, debugDescription: "Bad ISO8601: \(str)"))
         }
-        do {
-            return try decoder.decode(UsageResponse.self, from: data)
-        } catch {
-            throw UsageFetchError.decode(error, body: bodyStr)
-        }
+        return try decoder.decode(UsageResponse.self, from: data)
     }
 
     private static func fmt(_ seconds: TimeInterval) -> String {

@@ -14,15 +14,22 @@ enum PopoverSampleRenderer {
 
     private static func snap(sessionPct: Double, sessionResetIn: TimeInterval,
                              weeklyPct: Double, weeklyResetIn: TimeInterval,
-                             ahead: Bool) -> UsageSnapshot {
+                             ahead: Bool,
+                             models: [(name: String, pct: Double, ahead: Bool)] = []) -> UsageSnapshot {
         let now = Date()
         let weeklyElapsed = max(0, min(1, (7 * 24 * 3600 - weeklyResetIn) / (7 * 24 * 3600)))
+        let resetsAt = now.addingTimeInterval(weeklyResetIn)
         return UsageSnapshot(
             capturedAt: now,
             session: .init(utilizationPct: sessionPct, resetsAt: now.addingTimeInterval(sessionResetIn),
                            elapsedFraction: 0, isAhead: false),
-            weekly: .init(utilizationPct: weeklyPct, resetsAt: now.addingTimeInterval(weeklyResetIn),
-                          elapsedFraction: weeklyElapsed, isAhead: ahead)
+            weekly: .init(utilizationPct: weeklyPct, resetsAt: resetsAt,
+                          elapsedFraction: weeklyElapsed, isAhead: ahead),
+            weeklyModels: models.map { m in
+                .init(label: m.name,
+                      state: .init(utilizationPct: m.pct, resetsAt: resetsAt,
+                                   elapsedFraction: weeklyElapsed, isAhead: m.ahead))
+            }
         )
     }
 
@@ -30,16 +37,21 @@ enum PopoverSampleRenderer {
         let h: TimeInterval = 3600, d: TimeInterval = 24 * 3600
         return [
             Sample(label: "Fresh", state: EngineState(
-                snapshot: snap(sessionPct: 8, sessionResetIn: 4 * h + 50 * 60, weeklyPct: 12, weeklyResetIn: 6 * d, ahead: false),
+                snapshot: snap(sessionPct: 8, sessionResetIn: 4 * h + 50 * 60, weeklyPct: 12, weeklyResetIn: 6 * d, ahead: false,
+                               models: [("Fable", 5, false)]),
                 status: .ok, lastSuccess: Date())),
             Sample(label: "Mid · on pace", state: EngineState(
-                snapshot: snap(sessionPct: 52, sessionResetIn: 2 * h + 30 * 60, weeklyPct: 44, weeklyResetIn: 4 * d, ahead: false),
+                snapshot: snap(sessionPct: 52, sessionResetIn: 2 * h + 30 * 60, weeklyPct: 44, weeklyResetIn: 4 * d, ahead: false,
+                               models: [("Fable", 8, false)]),
                 status: .ok, lastSuccess: Date())),
             Sample(label: "Weekly ahead", state: EngineState(
-                snapshot: snap(sessionPct: 62, sessionResetIn: 2 * h + 14 * 60, weeklyPct: 78, weeklyResetIn: 3 * d, ahead: true),
+                snapshot: snap(sessionPct: 62, sessionResetIn: 2 * h + 14 * 60, weeklyPct: 78, weeklyResetIn: 3 * d, ahead: true,
+                               models: [("Fable", 61, true)]),
                 status: .ok, lastSuccess: Date())),
+            // Two models — proves the panel scales to however many caps the API returns.
             Sample(label: "Near cap", state: EngineState(
-                snapshot: snap(sessionPct: 94, sessionResetIn: 38 * 60, weeklyPct: 92, weeklyResetIn: 1 * d, ahead: true),
+                snapshot: snap(sessionPct: 94, sessionResetIn: 38 * 60, weeklyPct: 92, weeklyResetIn: 1 * d, ahead: true,
+                               models: [("Fable", 88, true), ("Opus", 90, true)]),
                 status: .ok, lastSuccess: Date())),
             Sample(label: "Offline (stale)", state: EngineState(
                 snapshot: snap(sessionPct: 52, sessionResetIn: 2 * h, weeklyPct: 44, weeklyResetIn: 4 * d, ahead: false),
