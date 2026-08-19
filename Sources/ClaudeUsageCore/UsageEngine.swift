@@ -119,6 +119,10 @@ public final class UsageEngine {
                 // if near expiry, and only the post-refresh read may prompt (the ping is what
                 // wipes the grant, so an interactive read is only ever needed *after* it).
                 lastKnownExpiryMs = probe.expiresAtMs
+                // Blank credentials mean the CLI already tried and failed to refresh, then
+                // cleared the item. Check before pinging: with no refreshToken to swap, the
+                // ping can only fail, and each one costs a `claude` spawn per poll.
+                if probe.isSignedOut { handleSignedOut(); return }
                 let didRefresh = await TokenRefresher.refreshIfNeeded(currentExpiresAtMs: probe.expiresAtMs)
                 active = didRefresh ? (try KeychainReader.read(allowInteraction: mayPrompt)) : probe
             } else {
@@ -133,6 +137,8 @@ public final class UsageEngine {
                 active = try KeychainReader.read(allowInteraction: mayPrompt)
             }
             lastKnownExpiryMs = active.expiresAtMs
+            // The ping we just ran can itself blank the item, so re-check after the read.
+            if active.isSignedOut { handleSignedOut(); return }
 
             // The endpoint returns 429 (not 401) for an expired bearer once we've hit it
             // enough times, so a dead token silently turns into an exponential back-off
@@ -234,6 +240,18 @@ public final class UsageEngine {
         let newState = EngineState(snapshot: lastSnapshot, status: status, lastSuccess: lastSuccess)
         state = newState
         onState?(newState)
+    }
+
+    /// The `claude` CLI cleared its own credentials after a rejected refresh. Nothing local
+    /// can fix this — no ping, no re-read — so say so precisely instead of routing to
+    /// `.refreshFailed`, whose "open Claude Code" advice does not restore a dead session.
+    /// Still counts as a failure so the poll interval backs off while we wait for a login.
+    private func handleSignedOut() {
+        failures += 1
+        last429 = false
+        Log.error("Keychain credentials are blank — the `claude` CLI cleared them after a "
+            + "rejected refresh (expired or revoked OAuth session). Run `claude /login` to sign in again.")
+        publish(.signedOut)
     }
 
     private func nextIntervalSec() -> TimeInterval {

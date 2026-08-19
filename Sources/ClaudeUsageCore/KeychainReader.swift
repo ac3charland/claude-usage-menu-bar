@@ -5,6 +5,14 @@ public struct OAuthCredentials {
     public let accessToken: String
     public let refreshToken: String
     public let expiresAtMs: Double
+
+    /// True when the `claude` CLI has *blanked* its own credentials. When a refresh is
+    /// rejected server-side (the OAuth session was revoked, or `refreshTokenExpiresAt`
+    /// simply elapsed), the CLI rewrites the Keychain item in place with empty token
+    /// strings and `expiresAt: 0` rather than deleting it — so the item still exists and
+    /// still decodes, it just holds nothing usable. No CLI ping can recover this; only a
+    /// fresh `claude /login` writes real tokens back.
+    public var isSignedOut: Bool { accessToken.isEmpty }
 }
 
 public enum KeychainError: Error, CustomStringConvertible {

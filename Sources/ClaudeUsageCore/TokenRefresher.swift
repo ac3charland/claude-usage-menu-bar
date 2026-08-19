@@ -70,9 +70,14 @@ public enum TokenRefresher {
             Log.warn("Stripping \(key) from CLI ping env — it would bypass the Keychain refresh")
         }
         proc.environment = env
-        proc.standardOutput = Pipe()
+        let stdoutPipe = Pipe()
         let stderrPipe = Pipe()
+        proc.standardOutput = stdoutPipe
         proc.standardError = stderrPipe
+        // The CLI waits ~3s for stdin to produce something before proceeding without it, and
+        // warns about the wait on stderr. We never feed it anything, so hand it /dev/null:
+        // no stall on every ping, and no incidental warning muddying the failure log below.
+        proc.standardInput = FileHandle.nullDevice
 
         let started = Date()
         do {
@@ -81,6 +86,14 @@ public enum TokenRefresher {
             Log.error("CLI ping spawn failed: \(error)")
             return
         }
+
+        // Drain both pipes concurrently, off the cooperative pool, so a full pipe buffer can't
+        // wedge the wait loop below and the output is in hand the moment the process exits.
+        // Started only after a successful spawn — otherwise these reads block on pipes that
+        // nothing will ever close.
+        let ioQueue = DispatchQueue(label: "com.claude-usage.cli-ping-io", attributes: .concurrent)
+        async let stdoutRead = drainToEnd(stdoutPipe.fileHandleForReading, on: ioQueue)
+        async let stderrRead = drainToEnd(stderrPipe.fileHandleForReading, on: ioQueue)
 
         let deadline = started.addingTimeInterval(cliTimeoutSeconds)
         while proc.isRunning && Date() < deadline {
@@ -92,6 +105,12 @@ public enum TokenRefresher {
             try? await Task.sleep(nanoseconds: 500_000_000)
             if proc.isRunning { proc.interrupt() }
         }
+        // Both reads complete as soon as the child's write ends close, which the exit above
+        // has already made true (or `terminate`/`interrupt` forced). Awaiting suspends rather
+        // than blocking a pool thread, so a child that somehow lingers costs a delayed log
+        // line, not a stuck thread.
+        let (stdoutData, stderrData) = await (stdoutRead, stderrRead)
+
         let elapsed = Date().timeIntervalSince(started)
         let code = proc.terminationStatus
         if code == 0 {
@@ -99,15 +118,37 @@ public enum TokenRefresher {
         } else {
             // Most common causes in practice: the keychain entry has an empty refreshToken,
             // or the refresh token itself was rejected server-side (session revoked/expired —
-            // the CLI prints "OAuth session expired and could not be refreshed" and only a
-            // fresh `claude /login` fixes it). Surface stderr so this doesn't take a manual
-            // repro to diagnose — the engine will also detect the unchanged expiry and route
-            // to .refreshFailed.
-            let stderrText = String(data: stderrPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            let detail = (stderrText?.isEmpty == false) ? " — \(stderrText!)" : ""
-            Log.warn("CLI ping exited code=\(code) after \(String(format: "%.1f", elapsed))s — token likely not refreshed\(detail)")
+            // only a fresh `claude /login` fixes that one). Log the CLI's own words so this
+            // never needs a manual repro to diagnose — reading *both* streams, because the CLI
+            // prints "Failed to authenticate: OAuth session expired and could not be refreshed"
+            // on stdout, not stderr. An earlier stderr-only version of this log left exactly
+            // that failure showing as a bare exit code, which is what it existed to prevent.
+            let detail = failureDetail(stdout: stdoutData, stderr: stderrData)
+            let suffix = detail.isEmpty ? "" : " — \(detail)"
+            Log.warn("CLI ping exited code=\(code) after \(String(format: "%.1f", elapsed))s — token likely not refreshed\(suffix)")
         }
+    }
+
+    /// Reads a pipe to EOF on `queue`, bridged into async so the caller suspends instead of
+    /// blocking a cooperative-pool thread (a blocking `wait` here is an error under Swift 6).
+    private static func drainToEnd(_ handle: FileHandle, on queue: DispatchQueue) async -> Data {
+        await withCheckedContinuation { continuation in
+            queue.async { continuation.resume(returning: handle.readDataToEndOfFile()) }
+        }
+    }
+
+    /// Folds the ping's captured output into a single log line: stdout first (where the CLI
+    /// puts its auth errors), newlines flattened so one failure stays one line, and truncated
+    /// so an unexpectedly chatty failure can't dump kilobytes into the log file.
+    private static func failureDetail(stdout: Data, stderr: Data) -> String {
+        let parts = [stdout, stderr]
+            .compactMap { String(data: $0, encoding: .utf8) }
+            .map { $0.replacingOccurrences(of: "\n", with: " ") }
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        let joined = parts.joined(separator: " | ")
+        let limit = 500
+        return joined.count > limit ? String(joined.prefix(limit)) + "…" : joined
     }
 
     private static func locateClaudeBinary() -> String? {

@@ -85,3 +85,109 @@ session expired and could not be refreshed` directly, no manual reproduction nee
 - Validated the message text against a live failure (`claude -p ping` run by hand above);
   have not yet observed the *app* log the new stderr line, since that needs a fresh
   failure — the immediate fix for the reported issue is running `claude /login`.
+
+---
+
+## Attempt 2 — 2026-08-19: same symptom, and the attempt-1 logging never fired
+
+### Symptom
+
+Widget stuck on *"Couldn't refresh login — open Claude Code"*. The user opened Claude Code
+(the desktop app), which changed nothing.
+
+### What the log showed
+
+Healthy right up to 13:53Z, then:
+
+```
+13:53:28Z INFO Token expires in -1min — refreshing via CLI ping
+13:53:31Z WARN CLI ping exited code=1 after 3.0s — token likely not refreshed
+13:53:31Z ERROR Access token still expired after refresh attempt — skipping poll.
+14:10:14Z INFO Token expires in -29785810min — refreshing via CLI ping
+```
+
+The expiry collapsing to ~1970 is the attempt-1 signature again: `expiresAtMs == 0`.
+Reading the Keychain item directly confirmed a state attempt 1 didn't name precisely:
+
+```
+accessToken:  len=0  (empty string, not absent)
+refreshToken: len=0
+expiresAt:    0
+refreshTokenExpiresAt: 1787134452918  → 2026-08-19 05:14 local
+mdat: 20260819135329Z                 → the exact second of the first failed ping
+```
+
+### Root cause
+
+`refreshTokenExpiresAt` had elapsed at 05:14. At 13:53 the CLI tried to use the dead
+refresh token, the server rejected it, and **the CLI rewrote its own Keychain item with
+empty token strings** rather than deleting it. So the item still exists and still decodes —
+`KeychainReader` returns credentials with empty strings and `expiresAt: 0`, and the engine
+reports `.refreshFailed` forever. Only `claude /login` restores it; the desktop app and
+claude.ai sessions never write this item (`mdat` stayed frozen at 13:53:29Z throughout).
+
+Same underlying condition as attempt 1 (dead CLI OAuth session), reached by a different
+route: the refresh token simply aged out rather than being revoked.
+
+### Why attempt 1's diagnostic didn't help
+
+Attempt 1 added stderr logging to `spawnPing()` precisely so this wouldn't need a manual
+repro. The installed binary contained that code, yet every failure logged a bare exit code.
+Reason: **the CLI prints the auth failure on stdout, not stderr.**
+
+```
+$ claude -p "ping diag2" --model haiku
+--- STDOUT ---  Failed to authenticate: OAuth session expired and could not be refreshed
+--- STDERR ---  Warning: no stdin data received in 3s, proceeding without it.
+exit=1
+```
+
+`spawnPing()` set `proc.standardOutput = Pipe()` and never read it, logging only stderr —
+which held nothing but an incidental stdin warning. So this diagnosis still took a manual
+repro, exactly what attempt 1 was meant to prevent.
+
+### Changes made
+
+**1. `Sources/ClaudeUsageCore/TokenRefresher.swift` — capture what the CLI actually says**
+
+- Read *both* stdout and stderr, stdout first, joined with `|` into one `failureDetail`
+  line (newlines flattened, truncated at 500 chars so a chatty failure can't flood the log).
+- Both pipes drain concurrently via `async let` + a `withCheckedContinuation` bridge, so a
+  full pipe buffer can't wedge the wait loop. An intermediate version used
+  `DispatchGroup.wait(timeout:)`, which is a blocking call in an async context (a warning
+  today, an error in Swift 6) — worth noting because `swift build` **hid** that warning on
+  an incremental run; it only appeared compiling the sources standalone.
+- `proc.standardInput = FileHandle.nullDevice`. The CLI waits ~3s for stdin before giving
+  up and warning about it; we never feed it anything. Ping time dropped 3.7s → 0.8s and the
+  spurious warning is gone from the failure line.
+- Drain setup moved *after* a successful `run()` — on a spawn failure the reads would
+  otherwise block forever on pipes nothing will close.
+
+**2. Blank credentials are now their own state, not `.refreshFailed`**
+
+- `OAuthCredentials.isSignedOut` (`KeychainReader.swift`) — true when `accessToken` is
+  empty, i.e. the CLI blanked the item.
+- `EngineStatus.signedOut` (`EngineState.swift`) → *"Signed out — run claude /login in a
+  terminal"*.
+- `UsageEngine.handleSignedOut()`, called from **both** read paths in `pollOnce`: once on
+  the silent probe (before any ping, since with no refreshToken to swap the ping can only
+  fail — it was costing a `claude` spawn every poll) and once after the authoritative read
+  (the ping can blank the item mid-poll).
+- `.refreshFailed`'s text changed from "open Claude Code" to "run claude /login". Opening
+  the desktop app cannot fix a dead CLI session — that advice sent the user down a dead end
+  in this very report.
+
+### Build / status
+
+- `swift build` → **Build complete**, only the two pre-existing legacy-Keychain deprecation
+  warnings. `swift test` → 6 tests, 0 failures.
+- **Both changes verified live against the blanked Keychain**, rather than shipped on
+  inspection as in attempt 1:
+  - `ClaudeUsageDaemon` now logs `Keychain credentials are blank — the 'claude' CLI cleared
+    them after a rejected refresh … Run 'claude /login' to sign in again.` and spawns **no**
+    ping.
+  - A standalone harness calling `TokenRefresher.forceRefresh()` logs `CLI ping exited
+    code=1 after 0.8s — token likely not refreshed — Failed to authenticate: OAuth session
+    expired and could not be refreshed`.
+- Release bundle rebuilt and installed to `/Applications/Claude Usage.app`.
+- **The underlying sign-in still has to be restored by the user: `claude` → `/login`.**
