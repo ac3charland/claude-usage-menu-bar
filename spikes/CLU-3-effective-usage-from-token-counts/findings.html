@@ -87,7 +87,7 @@
   tr.total td { font-weight: 700; border-top: 2px solid var(--rule); }
   .yes { color: var(--ok); font-weight: 600; }
   .no  { color: var(--bad); font-weight: 600; }
-  .maybe { color: var(--warn); font-weight: 600; }
+  .maybe, span.warn { color: var(--warn); font-weight: 600; }
   .fig { margin: 1.4rem 0; }
   .fig figcaption { font-size: .84rem; color: var(--muted); margin-top: .5rem; }
   dl.qa dt { font-weight: 700; margin-top: 1.1rem; }
@@ -107,7 +107,8 @@
   <p class="kicker">Spike findings · CLU-3</p>
   <h1>Measuring effective usage week over week from raw token counts</h1>
   <p class="sub">Can we cross-check the plan-usage percentage this widget already shows against the
-  equivalent API-list-price cost of the tokens actually burned?</p>
+  equivalent API-list-price cost of the tokens actually burned — and use that to detect whether the
+  effective weekly allowance is being quietly reduced?</p>
   <p class="meta">
     <b>Status</b> complete · investigation only, no app or source changes<br>
     <b>Date</b> 2026-09-21 · <b>Repo</b> claude-usage-menu-bar · <b>Branch</b> spike/clu-3-effective-usage-token-counts<br>
@@ -144,20 +145,32 @@ public list prices reproduces Claude Code's own cost figure <em>to the cent</em>
 
 <p><strong>But the conversion factor — "how many dollars is one percentage point of my weekly
 plan?" — is not a constant you can look up or hardcode.</strong> The endpoint never exposes the
-denominator (<code>limit_dollars</code> is <code>null</code> on this plan). A single live
-observation on 2026-09-21 gives <strong>≈$8.79 per weekly percentage point → ≈$879 per full
-weekly window</strong>. Back-extrapolating that constant to the previous six weeks produces one
-impossible value (137% for the week of 08-28), so the ratio is either not stable across weeks or
-the limits were actually hit that week. One data point cannot tell these apart.</p>
+denominator (<code>limit_dollars</code> is <code>null</code> on this plan). It has to be measured,
+per window, from paired observations of utilization and cost.</p>
 
-<p><strong>Therefore the design that works is self-calibrating, not hardcoded:</strong> log
-<code>(timestamp, utilization%, cumulative $)</code> on every poll the widget already makes, and
-fit the slope <em>within the current window</em>. That is robust to the constant changing, and it
-is the only way to answer "week over week" at all — see §10.</p>
+<p><strong>Those paired observations already exist.</strong> The widget's own log file has been
+recording <code>weekly=NN%</code> every two minutes since 2026-09-03 — 4,969 snapshots covering
+four weekly windows. Joined to the transcripts it yields a real
+dollars-per-percentage-point series (§8), not an extrapolation.</p>
+
+<p><strong>On the actual question — is the weekly allowance being quietly devalued? — the answer
+is "no clear evidence, and the data cannot yet settle it."</strong> Three of the four recoverable
+windows are consistent with $7–9 per point. The fourth (2026-08-28) implies <em>at least</em>
+$16.57 per point, which would mean the allowance has since roughly halved — but that window is
+also the only Fable-heavy one, and model mix is a confounder of exactly the right size to explain
+it. See §8.</p>
+
+<p><strong>The blocker is identifiability, and it has a one-line fix.</strong> Each window gives
+one equation, <code>local$ = k × pct × coverage</code>, in two unknowns: the rate <code>k</code>
+and the share of the week that ran outside Claude Code. The endpoint <em>already returns</em> that
+share in <code>seven_day_breakdown</code> — the widget just doesn't log it. Start logging it and
+every future week yields a clean <code>k</code>. Without it, a silent reduction is mathematically
+indistinguishable from the user doing more work in Cowork or on another machine — and §8 shows
+coverage really does swing that hard.</p>
 
 <p><strong>The ticket's worry about Claude chat sessions is measurable and currently moot.</strong>
-The endpoint returns a per-surface breakdown. Right now: Claude Code 94%, Cowork 6%, Chats 0%.
-You always know exactly how much of the week the transcripts <em>cannot</em> account for. See §9.</p>
+The endpoint returns that same per-surface breakdown. Right now: Claude Code 94%, Cowork 6%,
+Chats 0%. See §9.</p>
 </div>
 
 <h2 id="endpoint">2. What the usage endpoint already tells us (more than the app reads)</h2>
@@ -559,41 +572,128 @@ structural:</p>
 Calibrate against the <strong>weekly</strong> window only. The session ring is for display; it is
 too small and too laggy to divide by.</p>
 
-<h3>The week-over-week picture, and the problem with it</h3>
+<h3>Raw measured spend, six weeks</h3>
 
-<p>Six weekly windows of transcript cost, bucketed on the observed Friday 19:00Z boundary, with
-the percentage each <em>would</em> imply at $8.79/pp:</p>
+<p>Transcript cost per weekly window, bucketed on the Friday 19:00Z boundary. These are direct
+measurements — no assumption about the plan is involved:</p>
 
 <div class="tablewrap">
 <table>
-<thead><tr><th>Week starting</th><th class="num">Requests</th><th class="num">Cost</th><th class="num">Cache read as % of $</th><th class="num">Implied weekly %</th></tr></thead>
+<thead><tr><th>Week starting</th><th class="num">Requests</th><th class="num">List-price cost</th><th class="num">Cache read as % of $</th></tr></thead>
 <tbody>
-<tr><td>2026-08-14</td><td class="num">218</td><td class="num">$14.94</td><td class="num">55%</td><td class="num">1.7%</td></tr>
-<tr><td>2026-08-21</td><td class="num">4,747</td><td class="num">$615.50</td><td class="num">75%</td><td class="num">70.0%</td></tr>
-<tr><td>2026-08-28</td><td class="num">7,639</td><td class="num">$1,211.06</td><td class="num">72%</td><td class="num"><span class="no">137.8%</span></td></tr>
-<tr><td>2026-09-04</td><td class="num">4,898</td><td class="num">$674.80</td><td class="num">63%</td><td class="num">76.8%</td></tr>
-<tr><td>2026-09-11</td><td class="num">569</td><td class="num">$50.38</td><td class="num">65%</td><td class="num">5.7%</td></tr>
-<tr><td>2026-09-18 <em>(partial)</em></td><td class="num">2,098</td><td class="num">$398.99</td><td class="num">87%</td><td class="num">45.4% <span class="yes">← anchor</span></td></tr>
+<tr><td>2026-08-14</td><td class="num">218</td><td class="num">$14.94</td><td class="num">55%</td></tr>
+<tr><td>2026-08-21</td><td class="num">4,747</td><td class="num">$615.50</td><td class="num">75%</td></tr>
+<tr><td>2026-08-28</td><td class="num">7,639</td><td class="num">$1,211.06</td><td class="num">72%</td></tr>
+<tr><td>2026-09-04</td><td class="num">4,898</td><td class="num">$674.80</td><td class="num">63%</td></tr>
+<tr><td>2026-09-11</td><td class="num">569</td><td class="num">$50.38</td><td class="num">65%</td></tr>
+<tr><td>2026-09-18 <em>(partial)</em></td><td class="num">2,098</td><td class="num">$398.99</td><td class="num">87%</td></tr>
 </tbody>
 </table>
 </div>
 
-<p>The week of 2026-08-28 lands at 137.8%, which cannot happen. Three explanations, and this
-spike cannot distinguish them:</p>
+<p>Only the last four weeks overlap the widget's log, so only those four can be paired with a
+utilization reading.</p>
+
+<h3 id="devaluation">Is the weekly allowance shrinking? The direct measurement</h3>
+
+<p>This is the question the ticket actually exists to answer, and it needs
+<em>independently measured</em> pairs of (utilization, cost) — one per week. Extrapolating a
+single week's rate backwards cannot detect a change in that rate; it assumes the answer.</p>
+
+<div class="callout ok">
+<span class="lbl">The history exists after all</span>
+<p style="margin:0">The widget has been writing
+<code>Snapshot: session=… weekly=NN.N% (elapsed …)</code> to
+<code>~/Library/Application Support/claude-usage-menu-bar/claude-usage.log</code> every two
+minutes since <strong>2026-09-03</strong> — <strong>4,969 usable observations across four weekly
+windows</strong>, and the rotated <code>.1.log</code> extends it further back. The
+<code>elapsed</code> fraction recovers each window's start time, so every line can be joined to
+the transcript cost accumulated since that start. No new instrumentation was needed to get this
+far; it was a side effect of ordinary logging.</p>
+</div>
+
+<p>For each window: the highest utilization observed, and the local Claude Code dollars accrued
+from the window's start up to that same instant.</p>
+
+<div class="tablewrap">
+<table>
+<thead>
+<tr><th>Window start</th><th class="num">Peak util.</th><th class="num">Local $ at that instant</th>
+    <th class="num">$/pp (lower bound)</th><th>Model mix by $</th></tr>
+</thead>
+<tbody>
+<tr><td>2026-08-28 19:00Z</td><td class="num">72%</td><td class="num">$1,193.15</td>
+    <td class="num"><span class="warn">≥ $16.57</span></td>
+    <td>opus-5 73%, <strong>fable-5 23%, fable-5.1 4%</strong></td></tr>
+<tr><td>2026-09-04 19:00Z</td><td class="num">98%</td><td class="num">$669.03</td>
+    <td class="num">≥ $6.83</td><td>opus-5 89%, fable-5.1 10%, sonnet-5 1%</td></tr>
+<tr><td>2026-09-11 19:00Z</td><td class="num">69%</td><td class="num">$50.38</td>
+    <td class="num">≥ $0.73</td><td>opus-5 97%, haiku 1%, sonnet-5 1%</td></tr>
+<tr><td>2026-09-18 19:00Z <em>(current)</em></td><td class="num">48%</td><td class="num">$395.06</td>
+    <td class="num"><span class="yes">= $8.76</span></td><td>opus-5 100%</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>Only the last row is an equality, because it is the only window whose coverage is known
+(<code>seven_day_breakdown</code> says 94% Claude Code, so
+$395.06 ÷ (48 × 0.94) = $8.76). The others are <strong>lower bounds</strong>: they assume every
+percentage point came from local Claude Code, and since real coverage is below 100%, the true
+rate is <em>higher</em> than shown.</p>
+
+<h4>Reading the table</h4>
+
+<ul>
+  <li><strong>2026-09-11 is the warning.</strong> $50 of local spend while the week reached 69%.
+      Even as a bound it is useless — it means roughly 90% of that week ran somewhere the
+      transcripts cannot see. Coverage is not a stable background constant; it collapsed to near
+      nothing in one of four windows.</li>
+  <li><strong>2026-08-28 is the only signal of a cut</strong>, and it is a real one as far as it
+      goes: a <em>lower</em> bound of $16.57/pp then versus a <em>measured</em> $8.76/pp now
+      implies the allowance is worth at most half what it was. But it is also the only window with
+      meaningful Fable usage — 27% of its dollars — and Fable's list price is 2× Opus per token.
+      If the plan weights Fable by anything other than its list-price ratio, that alone moves the
+      number by the observed factor. Confounded.</li>
+  <li><strong>2026-09-04 → 2026-09-18 shows no cut.</strong> Both are Opus-dominated. The earlier
+      window's bound (≥$6.83) sits <em>below</em> the current measured $8.76, so on the comparable
+      pair the rate went up, not down.</li>
+</ul>
+
+<div class="callout bad">
+<span class="lbl">Why this cannot be settled yet</span>
+<p style="margin:0 0 .5rem">Each window yields one equation in two unknowns:</p>
+<pre style="margin:.5rem 0"><code>local_dollars  =  k_w  ×  utilization  ×  coverage_w</code></pre>
+<p style="margin:0">— where <code>k_w</code> is the rate we want and <code>coverage_w</code> is
+Claude Code's share of that week. Four windows, four equations, eight unknowns. <strong>A
+shrinking <code>k</code> and a falling <code>coverage</code> are the same observation.</strong>
+The fix is not more cleverness, it is one more logged field:
+<code>seven_day_breakdown.rows</code> pins <code>coverage_w</code> and collapses the system to one
+unknown per week.</p>
+</div>
+
+<h4>Three confounders any future comparison has to control</h4>
+
 <ol>
-  <li><strong>Limits were genuinely hit that week.</strong> Plausible — it is the heaviest week by
-      far and the only one with substantial Fable usage ($277 fable-5 + $49 fable-5.1), which
-      burns both the all-model weekly and its own scoped cap. A grep of the transcripts for
-      limit-reached messages found no positive evidence, but that grep is weak evidence of absence.</li>
-  <li><strong>The ratio is not constant across weeks</strong> — plan limits, model list prices, or
-      Anthropic's internal weighting changed within the six-week span.</li>
-  <li><strong>The percentage is not linear in list-price dollars</strong> — e.g. cache reads are
-      weighted differently from the public 0.1× when charged against a subscription plan. Given
-      cache reads swing between 55% and 87% of the dollar across these weeks, a different weight
-      would reorder the table substantially.</li>
+  <li><strong>Coverage</strong> — as above. Fixed by logging the breakdown.</li>
+  <li><strong>Model mix.</strong> Comparing a Fable-heavy week to an Opus-only week compares
+      list-price ratios, not plan generosity. Either compare like-for-like weeks, or accumulate
+      enough windows to fit per-model coefficients. The separate <code>weekly_scoped</code> Fable
+      cap is a hint that the plan does not treat models interchangeably.</li>
+  <li><strong>List prices move.</strong> A cut to Opus's public price would drop $/pp with no
+      change whatsoever to the allowance — the metric would report a devaluation that did not
+      happen. <strong>Denominate the series in a frozen price table</strong> (snapshot the rates,
+      version them, keep using the old one for the historical series) so the unit stays fixed.
+      This matters: Sonnet 5's price changed within the period these transcripts cover.</li>
 </ol>
 
-<p>All three point the same direction for the design: <strong>do not hardcode a constant.</strong></p>
+<div class="callout warn">
+<span class="lbl">Windows that max out read low</span>
+<p style="margin:0">Spend past 100% is billed to extra-usage credits and does <em>not</em> advance
+the percentage, so a window that hits the cap accumulates local dollars against a frozen
+denominator and reports an inflated $/pp. None of the four windows above reached 100% (peak 98%),
+so none is affected here — but the estimator must exclude maxed-out windows, and
+<code>extra_usage.used_credits</code> is the flag for detecting them.</p>
+</div>
 
 <h2 id="coverage">9. Coverage: what the transcripts can never see</h2>
 
@@ -636,12 +736,15 @@ cumulative $ since window_started_at)</code> on every poll the widget already ma
 minutes) and check the fit. A straight line through the origin means the model holds; curvature or
 a step means it does not.</dd>
 
-<dt>Is the constant stable <em>across</em> weeks?</dt>
-<dd>Unknown, and the 08-28 row argues against it. Resolvable only by collecting several weeks of
-the log above. <strong>Nothing in the existing data can answer this</strong> — the endpoint returns
-only the current window and the app's <code>SnapshotCache</code> keeps only the last good reading
-(<code>~/Library/Application Support/claude-usage-menu-bar/usage-backup.json</code>, single
-object, overwritten each poll). No history exists anywhere on this machine.</dd>
+<dt>Is the rate stable <em>across</em> weeks — i.e. is the allowance being quietly cut?</dt>
+<dd>The central question, and §8 gets partway: four windows recovered from the widget's log, three
+consistent at $7–9/pp and one (2026-08-28) implying ≥$16.57/pp. Not settled, because that window
+is also the Fable-heavy one. <strong>Settling it needs the per-surface breakdown logged alongside
+the percentage</strong> — without <code>coverage_w</code> the system is underdetermined. Note the
+endpoint returns only the current window and <code>SnapshotCache</code>
+(<code>usage-backup.json</code>) keeps only the last reading, so the <em>log file</em> is the sole
+historical record and it starts 2026-09-03. It is also rotated and will eventually be lost: the
+calibration series deserves its own append-only file, not a side effect of a rotating log.</dd>
 
 <dt>Are cache reads weighted the same by plan accounting as by list price?</dt>
 <dd>The highest-leverage sub-question, since cache reads are 55–87% of the dollar. Testable once
@@ -675,14 +778,24 @@ an off-by-one-window start silently ruins every cost figure downstream.</dd>
       <code>seven_day_breakdown</code> (for the window start and the coverage share) and the
       <code>*_dollars</code> nullables. Small, additive change to
       <code>UsagePoller.UsageResponse</code>, and independently useful.</li>
-  <li><strong>Log the calibration pairs.</strong> Append
-      <code>(capturedAt, utilization, claudeCodeShare, cumulativeCost, windowStartedAt)</code> to a
-      rolling on-disk log on each poll. This is the only way to answer the week-over-week question,
-      and it costs one line per poll. <em>Do this first — it starts accruing the data the rest
-      depends on.</em></li>
-  <li><strong>Fit, don't hardcode.</strong> Derive $/pp from the current window's own logged pairs;
-      show the implied weekly budget as a derived, clearly-provisional number. Fall back to
-      "cost only, no percentage mapping" when the fit is poor or the window is young.</li>
+  <li><strong>Log the calibration pairs — do this first, before anything else.</strong> Append
+      <code>(capturedAt, windowStartedAt, utilization, claudeCodeShare, cumulativeCost,
+      costByModel, extraUsageCredits, priceTableVersion)</code> to a dedicated append-only file on
+      every poll. It costs one line per poll and it is the only thing that makes the
+      week-over-week question answerable. Two details are load-bearing and easy to omit:
+      <strong><code>claudeCodeShare</code></strong> (from <code>seven_day_breakdown</code>, without
+      which the system is underdetermined — §8) and <strong><code>priceTableVersion</code></strong>
+      (so a public price change cannot masquerade as a devaluation). Do not rely on
+      <code>claude-usage.log</code>: it happens to carry the history today, but it rotates and will
+      lose it.</li>
+  <li><strong>Report $/pp per completed window, not a global constant.</strong> One value per
+      weekly window, each with its coverage, its model mix, and a flag for whether the window
+      maxed out (excluded — see §8). A trend in that series, across windows of comparable mix and
+      coverage, is the devaluation signal the ticket is after. A single number is not.</li>
+  <li><strong>Be honest about confidence.</strong> Suppress the estimate when Claude Code's share
+      is low, when the window is young, or when the mix is unlike the comparison windows. The
+      2026-09-11 window (6% coverage) would otherwise have reported a 12× collapse in plan
+      generosity that was really just the user working elsewhere.</li>
   <li><strong>Test against OTel.</strong> A fixture of transcript rows whose expected cost came
       from <code>claude_code.cost.usage</code> pins the pricing table and the dedup policy — the
       two things most likely to silently drift. <code>Tests/ClaudeUsageCoreTests/</code> already
@@ -706,7 +819,25 @@ OTEL_METRIC_EXPORT_INTERVAL=3000 OTEL_LOGS_EXPORTER=none \
   claude -p "reply with the single word: ok" --model haiku
 
 # Independent cost cross-check
-npx ccusage daily --since 20260918 --json</code></pre>
+npx ccusage daily --since 20260918 --json
+
+# The historical utilization series (§8) - the widget's own log
+grep -h "Snapshot:" ~/Library/Application\ Support/claude-usage-menu-bar/claude-usage*.log
+# 2026-09-03T06:35:20Z INFO Snapshot: session=24.0% (elapsed 68.4% ·on-pace)  \
+#   weekly=44.0% (elapsed 78.3% ·on-pace)  fable=37.0% (elapsed 78.3% ·on-pace)</code></pre>
+
+<p>To rebuild §8: parse each <code>Snapshot:</code> line for its timestamp, <code>weekly=</code>
+percentage and weekly <code>elapsed</code> fraction; recover the window start as
+<code>timestamp − elapsed × 7d</code> (snap to the hour to absorb the 0.1% logging resolution, and
+merge starts within ~2h of each other); take the highest percentage observed per window; sum the
+transcript cost from that window's start to that observation's timestamp; divide.</p>
+
+<p>Two estimators were tried and one is wrong. The <strong>cumulative</strong> form above works
+because both quantities share an origin. A <strong>marginal</strong> form — regressing Δcost
+against Δpercent between consecutive polls — does not: with integer percentages and a 2-minute
+poll, a single point ticks over as soon as it rounds up, so the cost measured in that interval is
+an arbitrary fraction of the cost actually behind it. It produced estimates 3–10× too low and
+should not be revived.</p>
 
 <p>The cost computation itself is: group assistant rows by
 <code>(message.id, requestId)</code>, per-field max over
