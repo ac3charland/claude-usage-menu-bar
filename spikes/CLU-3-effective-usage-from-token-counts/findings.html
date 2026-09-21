@@ -129,7 +129,7 @@
     <li><a href="#calibration">The calibration experiment and what it showed</a></li>
     <li><a href="#coverage">Coverage: what the transcripts can never see</a></li>
     <li><a href="#open">Open questions a follow-up must resolve</a></li>
-    <li><a href="#shape">Implementation shape, if this becomes a feature</a></li>
+    <li><a href="#shape">The system going forward — estimator, precision, what to record</a></li>
     <li><a href="#repro">Reproducing this</a></li>
   </ol>
 </div>
@@ -153,20 +153,34 @@ recording <code>weekly=NN%</code> every two minutes since 2026-09-03 — 4,969 s
 four weekly windows. Joined to the transcripts it yields a real
 dollars-per-percentage-point series (§8), not an extrapolation.</p>
 
-<p><strong>On the actual question — is the weekly allowance being quietly devalued? — the answer
-is "no clear evidence, and the data cannot yet settle it."</strong> Three of the four recoverable
-windows are consistent with $7–9 per point. The fourth (2026-08-28) implies <em>at least</em>
-$16.57 per point, which would mean the allowance has since roughly halved — but that window is
-also the only Fable-heavy one, and model mix is a confounder of exactly the right size to explain
-it. See §8.</p>
+<p><strong>A tracking system is feasible, and §11 specifies it.</strong> The estimator that works
+uses <em>tick crossings</em>: when the reported integer utilization steps <code>n → n+1</code>, the
+true value crossed <code>n+0.5</code> at that instant, so a week run to 98% yields ~98 sharp
+observations instead of one. Regressing cumulative cost on those gives the dollars per point, with
+an intercept that absorbs the endpoint's accounting lag.</p>
 
-<p><strong>The blocker is identifiability, and it has a one-line fix.</strong> Each window gives
-one equation, <code>local$ = k × pct × coverage</code>, in two unknowns: the rate <code>k</code>
-and the share of the week that ran outside Claude Code. The endpoint <em>already returns</em> that
-share in <code>seven_day_breakdown</code> — the widget just doesn't log it. Start logging it and
-every future week yields a clean <code>k</code>. Without it, a silent reduction is mathematically
-indistinguishable from the user doing more work in Cowork or on another machine — and §8 shows
-coverage really does swing that hard.</p>
+<p><strong>Two constraints are non-negotiable and both were measured, not guessed.</strong>
+(1) The estimate only converges once a window passes <strong>~70% utilization</strong> — measured
+at 50% it reads 46% high, at 10% it reads 322% high. A light week is not a data point.
+(2) <strong>The regression's own error bars lie</strong>: at a 20% cut-off it reports ±7% while
+being 182% wrong. Gate on utilization reached and compare only over matched spans. Respect both
+and the method is tight — two windows compared over an identical 0.5→47.5% span agreed to
+<strong>0.4%</strong> ($7.96 vs $7.99).</p>
+
+<p><strong>On whether the allowance has already been cut: no evidence that it has.</strong> The
+only two windows comparable like-for-like are indistinguishable. An earlier apparent halving was
+an artifact of comparing a half-finished window against a complete one. See §8.</p>
+
+<p><strong>The one field that makes or breaks this</strong> is the per-surface breakdown. Each
+window gives one equation, <code>local$ = k × pct × coverage</code>, in two unknowns. The endpoint
+<em>already returns</em> <code>coverage</code> in <code>seven_day_breakdown</code>; the widget just
+doesn't log it. Without it a silent cut is indistinguishable from working outside Claude Code —
+and the 2026-09-11 window would have reported an 8× collapse that was really just a quiet week at
+the terminal.</p>
+
+<p><strong>Expected precision: ±5% on a full window, detecting week-over-week changes of about
+±15–20%.</strong> Enough to catch a silent quarter-cut within two heavy weeks; not enough to
+resolve a 5% drift. Model mix is the confounder that dominates everything else.</p>
 
 <p><strong>The ticket's worry about Claude chat sessions is measurable and currently moot.</strong>
 The endpoint returns that same per-surface breakdown. Right now: Claude Code 94%, Cowork 6%,
@@ -641,22 +655,46 @@ $395.06 ÷ (48 × 0.94) = $8.76). The others are <strong>lower bounds</strong>: 
 percentage point came from local Claude Code, and since real coverage is below 100%, the true
 rate is <em>higher</em> than shown.</p>
 
-<h4>Reading the table</h4>
+<h4>These numbers are not comparable to each other</h4>
+
+<p>The table above compares windows at different stages of completion, and that turns out to
+invalidate the comparison. <strong>The estimate is strongly biased by how far through a window you
+measure it</strong> — see §11, where refitting the one full-span window at successive cut-offs
+gives $22.09/pp at 10% utilization, $7.65 at 50%, and $5.23 at 98%. A window observed half-way
+through reports roughly 50% high.</p>
+
+<p>Refitting every window over the <em>identical</em> 0.5→47.5% span (the furthest the current
+window has reached) removes that bias:</p>
+
+<div class="tablewrap">
+<table>
+<thead><tr><th>Window</th><th class="num">Ticks in span</th><th class="num">$/pp over 0.5→47.5%</th><th class="num">±1σ</th></tr></thead>
+<tbody>
+<tr><td>2026-09-04</td><td class="num">42</td><td class="num">$7.96</td><td class="num">±0.49</td></tr>
+<tr><td>2026-09-18 <em>(current)</em></td><td class="num">33</td><td class="num">$7.99</td><td class="num">±0.97</td></tr>
+<tr><td>2026-09-11</td><td class="num">25</td><td class="num"><span class="no">$0.95</span></td><td class="num">±0.09</td>
+</tr>
+<tr><td>2026-08-28</td><td class="num">4</td><td class="num" colspan="2">no overlap — the log starts mid-window</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="callout ok">
+<span class="lbl">Result</span>
+<p style="margin:0"><strong>$7.96 vs $7.99 — the two comparable windows are indistinguishable.</strong>
+The apparent devaluation in the previous table was an artifact of comparing a half-finished window
+against a complete one. On the evidence available there is <strong>no sign that the weekly
+allowance changed</strong> between 2026-09-04 and now.</p>
+</div>
 
 <ul>
-  <li><strong>2026-09-11 is the warning.</strong> $50 of local spend while the week reached 69%.
-      Even as a bound it is useless — it means roughly 90% of that week ran somewhere the
-      transcripts cannot see. Coverage is not a stable background constant; it collapsed to near
-      nothing in one of four windows.</li>
-  <li><strong>2026-08-28 is the only signal of a cut</strong>, and it is a real one as far as it
-      goes: a <em>lower</em> bound of $16.57/pp then versus a <em>measured</em> $8.76/pp now
-      implies the allowance is worth at most half what it was. But it is also the only window with
-      meaningful Fable usage — 27% of its dollars — and Fable's list price is 2× Opus per token.
-      If the plan weights Fable by anything other than its list-price ratio, that alone moves the
-      number by the observed factor. Confounded.</li>
-  <li><strong>2026-09-04 → 2026-09-18 shows no cut.</strong> Both are Opus-dominated. The earlier
-      window's bound (≥$6.83) sits <em>below</em> the current measured $8.76, so on the comparable
-      pair the rate went up, not down.</li>
+  <li><strong>2026-09-11 remains the warning.</strong> $0.95/pp — an apparent 8× collapse in plan
+      generosity that is really just $50 of local spend against a week largely spent elsewhere.
+      Without the coverage figure this window would have been read as a catastrophic silent cut.
+      It is the single strongest argument for logging <code>seven_day_breakdown</code>.</li>
+  <li><strong>2026-08-28 cannot be judged.</strong> The log begins mid-window at 44%, so there is
+      no overlap with the low-utilization span the others share. Its ≥$16.57 bound is also the
+      Fable-heavy one (27% of its dollars at 2× Opus list price). Unusable either way.</li>
 </ul>
 
 <div class="callout bad">
@@ -760,47 +798,196 @@ whole calibration problem disappears. Cheap to watch for — one null check in t
 an off-by-one-window start silently ruins every cost figure downstream.</dd>
 </dl>
 
-<h2 id="shape">11. Implementation shape, if this becomes a feature</h2>
+<h2 id="shape">11. The system going forward</h2>
 
-<p>Not a spec — a sketch of what the evidence above supports, for whoever refines CLU-3.</p>
+<p>This is the part that matters: a design that records, week after week, <em>"what dollar value of
+weekly usage is my cap, and is it different this week from last week?"</em> — and an honest account
+of how precisely it can answer.</p>
+
+<h3>The estimator: tick crossings, not end-of-week readings</h3>
+
+<p>The endpoint reports utilization as an integer. That looks like a precision ceiling but is
+actually an opportunity: <strong>when the reported value steps from <code>n</code> to
+<code>n+1</code>, the true utilization crossed <code>n+0.5</code> at that instant.</strong> Each
+tick is therefore a sharp observation, and a week that runs to 98% yields ~98 of them rather than
+one.</p>
+
+<pre><code>for each tick (reported n → n+1 between polls at t₀, t₁):
+    x = n + 0.5                                   # true utilization at the crossing
+    y = Σ cost(requests in [window_start, t₁])    # cumulative local spend
+
+fit  y = slope·x + intercept
+     slope     → dollars per percentage point, ×coverage
+     intercept → absorbs the endpoint's accounting lag (a roughly constant offset)
+
+dollars_per_point = slope / claude_code_share
+weekly_cap_value  = dollars_per_point × 100</code></pre>
+
+<p>Fitted on the four recoverable windows this yields a slope with a 4.5–13% standard error, and
+the intercept does real work — it ranged from −$99 to +$1,140 across windows, i.e. the lag is
+large and ignoring it would bias the slope badly.</p>
+
+<h3>Feasibility: how good is the answer, and when?</h3>
+
+<p>The single most important measured result. Refitting the one full-span window (2026-09-04, 68
+ticks) using only the ticks up to a given utilization:</p>
+
+<div class="tablewrap">
+<table>
+<thead><tr><th class="num">Fit using ticks up to</th><th class="num">n</th><th class="num">$/pp</th>
+    <th class="num">reported ±1σ</th><th class="num">true error vs full window</th></tr></thead>
+<tbody>
+<tr><td class="num">10%</td><td class="num">10</td><td class="num">$22.09</td><td class="num">±4.3%</td><td class="num"><span class="no">+322%</span></td></tr>
+<tr><td class="num">20%</td><td class="num">20</td><td class="num">$14.76</td><td class="num">±7.0%</td><td class="num"><span class="no">+182%</span></td></tr>
+<tr><td class="num">30%</td><td class="num">30</td><td class="num">$11.15</td><td class="num">±5.7%</td><td class="num"><span class="no">+113%</span></td></tr>
+<tr><td class="num">40%</td><td class="num">39</td><td class="num">$9.13</td><td class="num">±5.3%</td><td class="num"><span class="no">+75%</span></td></tr>
+<tr><td class="num">50%</td><td class="num">43</td><td class="num">$7.65</td><td class="num">±6.4%</td><td class="num"><span class="warn">+46%</span></td></tr>
+<tr><td class="num">60%</td><td class="num">44</td><td class="num">$7.11</td><td class="num">±7.1%</td><td class="num"><span class="warn">+36%</span></td></tr>
+<tr><td class="num">70%</td><td class="num">51</td><td class="num">$4.86</td><td class="num">±8.7%</td><td class="num"><span class="yes">−7%</span></td></tr>
+<tr><td class="num">80%</td><td class="num">60</td><td class="num">$4.90</td><td class="num">±6.1%</td><td class="num"><span class="yes">−6%</span></td></tr>
+<tr><td class="num">90%</td><td class="num">65</td><td class="num">$5.22</td><td class="num">±5.1%</td><td class="num"><span class="yes">−0.1%</span></td></tr>
+<tr><td class="num">98%</td><td class="num">68</td><td class="num">$5.23</td><td class="num">±4.5%</td><td class="num">—</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="callout bad">
+<span class="lbl">Two hard constraints fall out of this</span>
+<ol style="margin:0">
+  <li><strong>The estimate only converges past ~70% utilization.</strong> Below that it is biased
+      high, severely so early on. A week you only drive to 30% yields no usable measurement of the
+      cap — you simply do not learn the denominator until you approach it.</li>
+  <li><strong>The regression's own error bars are dangerously overconfident.</strong> At the 20%
+      cut-off it reports ±7% while being 182% wrong. The residual scatter is not the error; the
+      span is. <em>Never surface the reported σ as the confidence.</em> Gate on utilization
+      reached, and compare only over matched spans.</li>
+</ol>
+</div>
+
+<p>Once both constraints are respected the method is solid: the like-for-like comparison in §8
+(two windows, identical 0.5→47.5% span) agreed to <strong>0.4%</strong> — $7.96 vs $7.99.</p>
+
+<h4>So: what can it actually detect, and how fast?</h4>
+
+<div class="tablewrap">
+<table>
+<thead><tr><th>Question</th><th>Answer</th></tr></thead>
+<tbody>
+<tr><td>First usable cap estimate</td>
+    <td>End of the first window that reaches ~70%+ utilization. If you routinely run the plan hot,
+        that is <strong>one week</strong>; if not, whenever it next happens.</td></tr>
+<tr><td>First week-over-week comparison</td>
+    <td><strong>Two such windows</strong> — so ~2 weeks of heavy use, longer if light weeks
+        intervene. Light weeks are not data points.</td></tr>
+<tr><td>Precision on a full-span window</td>
+    <td>~±5% (1σ) from the fit, plus the coverage figure's own integer rounding (~±0.5%).</td></tr>
+<tr><td>Smallest detectable week-over-week change</td>
+    <td>Roughly <strong>±15–20%</strong> at 2σ on a matched pair of full windows. Enough to catch a
+        silent quarter-cut quickly; <em>not</em> enough to resolve a 5% drift.</td></tr>
+<tr><td>Confounder that dominates everything else</td>
+    <td>Model mix (§8). A Fable-heavy week is not comparable to an Opus week at all.</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>What to record, on every poll</h3>
+
+<p>One append-only line per poll, numbers only. The widget already polls every 1–5 minutes, so
+this is nearly free:</p>
+
+<pre><code>{
+  "capturedAt":        "2026-09-21T17:34:17Z",
+  "windowStartedAt":   "2026-09-18T19:00:00Z",   // seven_day_breakdown, not inferred
+  "weeklyPct":         48,
+  "sessionPct":        8,
+  "surfaceShares":     { "claude_code": 94, "cowork": 6, "chat": 0, "other": 0 },
+  "scopedPct":         { "Fable": 19 },
+  "costSinceWindowStart": 396.47,
+  "costByModel":       { "claude-opus-5": 396.00, "claude-haiku-4-5": 0.39 },
+  "tokensByClass":     { "input": …, "cacheWrite5m": …, "cacheWrite1h": …,
+                         "cacheRead": …, "output": … },
+  "extraUsageCredits": 442,                      // minor units - flags maxed-out windows
+  "priceTableVersion": "2026-09-21"
+}</code></pre>
+
+<p>Five fields are load-bearing and each is easy to leave out:</p>
+
+<div class="tablewrap">
+<table>
+<thead><tr><th>Field</th><th>Why the system breaks without it</th></tr></thead>
+<tbody>
+<tr><td><code>surfaceShares</code></td>
+    <td><strong>The one that makes it work at all.</strong> Without it the system is
+        underdetermined and the 2026-09-11 window reports an 8× silent cut that never happened.</td></tr>
+<tr><td><code>priceTableVersion</code></td>
+    <td>A public price cut would drop $/pp with no change to the allowance — a devaluation that
+        did not occur. Freeze the rates, version them, keep using the old table for the historical
+        series. Sonnet 5's price already changed inside the period these transcripts cover.</td></tr>
+<tr><td><code>costByModel</code></td>
+    <td>Lets a later analysis control for, or fit, per-model weighting — the dominant confounder.</td></tr>
+<tr><td><code>tokensByClass</code></td>
+    <td>Cache reads are 55–87% of the dollar. Keeping the classes separate is what makes it
+        possible to later test whether the plan weights them the way list price does.</td></tr>
+<tr><td><code>extraUsageCredits</code></td>
+    <td>Flags a window that maxed out, whose $/pp is inflated and must be excluded.</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="callout warn">
+<span class="lbl">Do not rely on claude-usage.log</span>
+<p style="margin:0">It carries the history today by accident, and §8 only exists because of that.
+But it rotates (<code>claude-usage.1.log</code> is already the overflow) and will silently lose
+the series. The calibration log needs its own append-only file with no rotation, or rotation that
+preserves it.</p>
+</div>
+
+<h3>Pieces, and where they go in this repo</h3>
 
 <ol>
-  <li><strong>A transcript scanner.</strong> Walk <code>~/.claude/projects/**/*.jsonl</code>,
-      keep <code>type == "assistant"</code> rows with a <code>usage</code> block and a known model,
-      group by <code>(message.id, requestId)</code>, take per-field max, price with the §5 table
-      including the 5m/1h cache-write split and Fable 5.1's 0.025× cache read. Incremental by file
-      mtime and byte offset; a full cold scan is under a second anyway.</li>
-  <li><strong>Read only <code>usage</code>.</strong> The transcripts contain full prompt and tool
-      text. This repo's posture is that nothing sensitive reaches disk or logs. The scanner should
-      parse and discard, never cache message content, and the aggregate it writes should contain
-      numbers only — the same discipline <code>SnapshotCache</code> already applies.</li>
-  <li><strong>Decode the fields the endpoint already sends</strong> —
-      <code>seven_day_breakdown</code> (for the window start and the coverage share) and the
-      <code>*_dollars</code> nullables. Small, additive change to
-      <code>UsagePoller.UsageResponse</code>, and independently useful.</li>
-  <li><strong>Log the calibration pairs — do this first, before anything else.</strong> Append
-      <code>(capturedAt, windowStartedAt, utilization, claudeCodeShare, cumulativeCost,
-      costByModel, extraUsageCredits, priceTableVersion)</code> to a dedicated append-only file on
-      every poll. It costs one line per poll and it is the only thing that makes the
-      week-over-week question answerable. Two details are load-bearing and easy to omit:
-      <strong><code>claudeCodeShare</code></strong> (from <code>seven_day_breakdown</code>, without
-      which the system is underdetermined — §8) and <strong><code>priceTableVersion</code></strong>
-      (so a public price change cannot masquerade as a devaluation). Do not rely on
-      <code>claude-usage.log</code>: it happens to carry the history today, but it rotates and will
-      lose it.</li>
-  <li><strong>Report $/pp per completed window, not a global constant.</strong> One value per
-      weekly window, each with its coverage, its model mix, and a flag for whether the window
-      maxed out (excluded — see §8). A trend in that series, across windows of comparable mix and
-      coverage, is the devaluation signal the ticket is after. A single number is not.</li>
-  <li><strong>Be honest about confidence.</strong> Suppress the estimate when Claude Code's share
-      is low, when the window is young, or when the mix is unlike the comparison windows. The
-      2026-09-11 window (6% coverage) would otherwise have reported a 12× collapse in plan
-      generosity that was really just the user working elsewhere.</li>
-  <li><strong>Test against OTel.</strong> A fixture of transcript rows whose expected cost came
-      from <code>claude_code.cost.usage</code> pins the pricing table and the dedup policy — the
-      two things most likely to silently drift. <code>Tests/ClaudeUsageCoreTests/</code> already
-      has the shape for this.</li>
+  <li><strong><code>TranscriptScanner</code></strong> (new, <code>ClaudeUsageCore</code>) — walks
+      <code>~/.claude/projects/**/*.jsonl</code>, keeps <code>type == "assistant"</code> rows with
+      a <code>usage</code> block and a known model, groups by
+      <code>(message.id, requestId)</code>, takes the per-field max (§4), prices with the frozen
+      table including the 5m/1h cache-write split and Fable 5.1's 0.025× cache read (§5).
+      Incremental by file mtime + byte offset; a full cold scan is 0.73 s anyway.</li>
+  <li><strong><code>UsageResponse</code> additions</strong> — decode
+      <code>seven_day_breakdown</code> (window start + surface shares) and the
+      <code>limit_dollars</code>/<code>used_dollars</code> nullables. Small and additive; useful on
+      its own even if nothing else ships. <em>If those dollar fields ever go non-null, they are
+      ground truth and the entire estimator becomes unnecessary</em> — worth a check that says so
+      loudly.</li>
+  <li><strong><code>CalibrationLog</code></strong> (new) — appends the record above on each poll,
+      alongside the existing <code>SnapshotCache</code> write in <code>UsageEngine</code>.</li>
+  <li><strong><code>CapEstimator</code></strong> (new) — tick extraction, the two-parameter fit,
+      the utilization gate, matched-span comparison against prior windows.</li>
+  <li><strong>Surfacing</strong> — a line in the popover, e.g. <em>"This week's cap ≈ $850 of API
+      usage · last week $846 · no change"</em>, and explicitly <em>"not enough of the window used
+      yet"</em> until the gate passes. Given the bias table above, showing a number early would be
+      worse than showing nothing.</li>
+  <li><strong>Tests</strong> — a fixture of transcript rows whose expected cost came from
+      <code>claude_code.cost.usage</code> (§5) pins the price table and the dedup policy, the two
+      things most likely to drift silently. <code>Tests/ClaudeUsageCoreTests/</code> already has
+      the shape.</li>
 </ol>
+
+<h3>Privacy</h3>
+
+<p>Transcripts contain full prompt and tool text. This repo's stated posture is that nothing
+sensitive reaches disk or logs, and <code>SnapshotCache</code> already scrubs on write. The scanner
+must parse and discard — never cache message content — and every field in the calibration record
+above is a number, a model ID, or a timestamp by construction. Keep it that way.</p>
+
+<h3>Current best answer</h3>
+
+<div class="verdict">
+<p style="margin:0"><strong>The weekly cap is worth roughly $800–$850 of API-list-price usage</strong>
+— from the matched-span fit ($7.99/pp ÷ 0.94 coverage ≈ $8.50/pp × 100), with the current window
+only 48% through and therefore biased high; the fuller 2026-09-04 window puts it nearer
+$5.23 ÷ coverage. Call it <strong>$550–$850, not yet pinned</strong>. The honest statement is that
+one full-span window plus its coverage figure would collapse that range to about ±5%, and nothing
+in the data so far suggests the number has moved between the two comparable windows.</p>
+</div>
 
 <h2 id="repro">12. Reproducing this</h2>
 
