@@ -1,0 +1,1049 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CLU-3 Spike Findings</title>
+<style>
+  :root {
+    --bg: #fbfaf8;  --panel: #ffffff; --ink: #1c1b19; --muted: #61605c;
+    --rule: #e3e0da; --accent: #9a5b2c; --accent-soft: #f4ece4;
+    --ok: #2f6b45; --warn: #8a5a08; --bad: #9c2f2f;
+    --code-bg: #f4f2ee;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #171614; --panel: #1f1e1b; --ink: #ecebe7; --muted: #a09e98;
+      --rule: #333029; --accent: #d79a63; --accent-soft: #2a241d;
+      --ok: #7fbf96; --warn: #d9ab5a; --bad: #e08b8b;
+      --code-bg: #26241f;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #171614; --panel: #1f1e1b; --ink: #ecebe7; --muted: #a09e98;
+    --rule: #333029; --accent: #d79a63; --accent-soft: #2a241d;
+    --ok: #7fbf96; --warn: #d9ab5a; --bad: #e08b8b;
+    --code-bg: #26241f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.62 ui-serif, Georgia, "Iowan Old Style", serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  .wrap { max-width: 56rem; margin: 0 auto; padding: 3rem 16px 6rem; }
+  header.doc { border-bottom: 2px solid var(--ink); padding-bottom: 1.25rem; margin-bottom: 2.5rem; }
+  .kicker {
+    font: 600 12px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase;
+    color: var(--accent); margin: 0 0 .75rem;
+  }
+  h1 { font-size: clamp(1.7rem, 4.5vw, 2.5rem); line-height: 1.18; margin: 0 0 .6rem; letter-spacing: -.01em; }
+  .sub { color: var(--muted); margin: 0; font-size: 1.02rem; }
+  .meta { margin: 1.1rem 0 0; font: 13px/1.7 var(--mono); color: var(--muted); }
+  .meta b { color: var(--ink); font-weight: 600; }
+  h2 {
+    font-size: 1.32rem; margin: 3rem 0 .9rem; letter-spacing: -.005em;
+    padding-bottom: .4rem; border-bottom: 1px solid var(--rule);
+  }
+  h3 { font-size: 1.05rem; margin: 1.9rem 0 .55rem; }
+  h4 { font-size: .95rem; margin: 1.4rem 0 .4rem; color: var(--muted); }
+  p, li { font-size: 1rem; }
+  ul, ol { padding-left: 1.3rem; }
+  li { margin: .38rem 0; }
+  code { font: 13.5px/1.5 var(--mono); background: var(--code-bg); padding: .1em .35em; border-radius: 4px; }
+  pre {
+    background: var(--code-bg); border: 1px solid var(--rule); border-radius: 8px;
+    padding: .9rem 1rem; overflow-x: auto; font: 13px/1.6 var(--mono);
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .verdict {
+    background: var(--panel); border: 1px solid var(--rule);
+    border-left: 4px solid var(--accent); border-radius: 8px;
+    padding: 1.1rem 1.25rem; margin: 1.5rem 0;
+  }
+  .verdict p:first-child { margin-top: 0; }
+  .verdict p:last-child { margin-bottom: 0; }
+  .callout {
+    border: 1px solid var(--rule); border-radius: 8px; padding: .85rem 1.1rem;
+    margin: 1.2rem 0; background: var(--panel);
+  }
+  .callout.warn { border-left: 4px solid var(--warn); }
+  .callout.bad { border-left: 4px solid var(--bad); }
+  .callout.ok { border-left: 4px solid var(--ok); }
+  .callout .lbl {
+    display: block; font: 600 11px/1 var(--mono); letter-spacing: .12em;
+    text-transform: uppercase; color: var(--muted); margin-bottom: .45rem;
+  }
+  .tablewrap { overflow-x: auto; margin: 1.1rem 0; -webkit-overflow-scrolling: touch; }
+  table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+  th, td {
+    text-align: left; padding: .5rem .65rem; border-bottom: 1px solid var(--rule);
+    vertical-align: top;
+  }
+  th { font: 600 12px/1.4 var(--mono); letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+  td.num, th.num { text-align: right; font-family: var(--mono); font-size: .85rem; white-space: nowrap; }
+  tbody tr:last-child td { border-bottom: none; }
+  tr.total td { font-weight: 700; border-top: 2px solid var(--rule); }
+  .yes { color: var(--ok); font-weight: 600; }
+  .no  { color: var(--bad); font-weight: 600; }
+  .maybe, span.warn { color: var(--warn); font-weight: 600; }
+  .fig { margin: 1.4rem 0; }
+  .fig figcaption { font-size: .84rem; color: var(--muted); margin-top: .5rem; }
+  dl.qa dt { font-weight: 700; margin-top: 1.1rem; }
+  dl.qa dd { margin: .3rem 0 0; color: var(--ink); }
+  .toc { background: var(--panel); border: 1px solid var(--rule); border-radius: 8px; padding: 1rem 1.25rem; }
+  .toc ol { margin: .4rem 0 0; padding-left: 1.4rem; }
+  .toc li { margin: .2rem 0; font-size: .95rem; }
+  a { color: var(--accent); }
+  hr.end { border: none; border-top: 1px solid var(--rule); margin: 3.5rem 0 1.2rem; }
+  footer { color: var(--muted); font-size: .86rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <p class="kicker">Spike findings · CLU-3</p>
+  <h1>Measuring effective usage week over week from raw token counts</h1>
+  <p class="sub">Can we cross-check the plan-usage percentage this widget already shows against the
+  equivalent API-list-price cost of the tokens actually burned — and use that to detect whether the
+  effective weekly allowance is being quietly reduced?</p>
+  <p class="meta">
+    <b>Status</b> complete · investigation only, no app or source changes<br>
+    <b>Date</b> 2026-09-21 · <b>Repo</b> claude-usage-menu-bar · <b>Branch</b> spike/clu-3-effective-usage-token-counts<br>
+    <b>Machine under test</b> macOS 25.6, Claude Code 2.1.278, 448 transcripts / 277&nbsp;MB in <code>~/.claude/projects</code>
+  </p>
+</header>
+
+<div class="toc">
+  <strong>Contents</strong>
+  <ol>
+    <li><a href="#verdict">Verdict</a></li>
+    <li><a href="#endpoint">What the usage endpoint already tells us (more than the app reads)</a></li>
+    <li><a href="#source">Where the token counts live</a></li>
+    <li><a href="#dedup">The dedup trap — the single biggest correctness risk</a></li>
+    <li><a href="#pricing">Turning tokens into dollars, and proving the formula</a></li>
+    <li><a href="#hooks">Hooks: the answer is no. OTel: the answer is yes.</a></li>
+    <li><a href="#tools">The open-source tool the ticket half-remembered: ccusage</a></li>
+    <li><a href="#calibration">The calibration experiment and what it showed</a></li>
+    <li><a href="#coverage">Coverage: what the transcripts can never see</a></li>
+    <li><a href="#open">Open questions a follow-up must resolve</a></li>
+    <li><a href="#shape">The system going forward — estimator, precision, what to record</a></li>
+    <li><a href="#repro">Reproducing this</a></li>
+  </ol>
+</div>
+
+<h2 id="verdict">1. Verdict</h2>
+
+<div class="verdict">
+<p><strong>Yes — an accurate, cheap, fully local measurement of API-equivalent spend is available,
+and it can be joined to the usage percentage this widget already polls.</strong> Claude Code writes
+a complete per-request <code>usage</code> block to its JSONL transcripts; multiplying those by
+public list prices reproduces Claude Code's own cost figure <em>to the cent</em> (verified exactly,
+§5). A full scan of 277&nbsp;MB / 448 transcripts takes 0.73&nbsp;s.</p>
+
+<p><strong>But the conversion factor — "how many dollars is one percentage point of my weekly
+plan?" — is not a constant you can look up or hardcode.</strong> The endpoint never exposes the
+denominator (<code>limit_dollars</code> is <code>null</code> on this plan). It has to be measured,
+per window, from paired observations of utilization and cost.</p>
+
+<p><strong>Those paired observations already exist.</strong> The widget's own log file has been
+recording <code>weekly=NN%</code> every two minutes since 2026-09-03 — 4,969 snapshots covering
+four weekly windows. Joined to the transcripts it yields a real
+dollars-per-percentage-point series (§8), not an extrapolation.</p>
+
+<p><strong>A tracking system is feasible, and §11 specifies it.</strong> The estimator that works
+uses <em>tick crossings</em>: when the reported integer utilization steps <code>n → n+1</code>, the
+true value crossed <code>n+0.5</code> at that instant, so a week run to 98% yields ~98 sharp
+observations instead of one. Regressing cumulative cost on those gives the dollars per point, with
+an intercept that absorbs the endpoint's accounting lag.</p>
+
+<p><strong>Two constraints are non-negotiable and both were measured, not guessed.</strong>
+(1) The estimate only converges once a window passes <strong>~70% utilization</strong> — measured
+at 50% it reads 46% high, at 10% it reads 322% high. A light week is not a data point.
+(2) <strong>The regression's own error bars lie</strong>: at a 20% cut-off it reports ±7% while
+being 182% wrong. Gate on utilization reached and compare only over matched spans. Respect both
+and the method is tight — two windows compared over an identical 0.5→47.5% span agreed to
+<strong>0.4%</strong> ($7.96 vs $7.99).</p>
+
+<p><strong>On whether the allowance has already been cut: no evidence that it has.</strong> The
+only two windows comparable like-for-like are indistinguishable. An earlier apparent halving was
+an artifact of comparing a half-finished window against a complete one. See §8.</p>
+
+<p><strong>The one field that makes or breaks this</strong> is the per-surface breakdown. Each
+window gives one equation, <code>local$ = k × pct × coverage</code>, in two unknowns. The endpoint
+<em>already returns</em> <code>coverage</code> in <code>seven_day_breakdown</code>; the widget just
+doesn't log it. Without it a silent cut is indistinguishable from working outside Claude Code —
+and the 2026-09-11 window would have reported an 8× collapse that was really just a quiet week at
+the terminal.</p>
+
+<p><strong>Expected precision: ±5% on a full window, detecting week-over-week changes of about
+±15–20%.</strong> Enough to catch a silent quarter-cut within two heavy weeks; not enough to
+resolve a 5% drift. Model mix is the confounder that dominates everything else.</p>
+
+<p><strong>The ticket's worry about Claude chat sessions is measurable and currently moot.</strong>
+The endpoint returns that same per-surface breakdown. Right now: Claude Code 94%, Cowork 6%,
+Chats 0%. See §9.</p>
+</div>
+
+<h2 id="endpoint">2. What the usage endpoint already tells us (more than the app reads)</h2>
+
+<p><code>GET https://api.anthropic.com/api/oauth/usage</code> returns considerably more than the
+three fields <code>UsagePoller.UsageResponse</code> currently decodes
+(<code>five_hour</code>, <code>seven_day</code>, <code>limits</code>). Live response, trimmed,
+captured 2026-09-21T17:34Z:</p>
+
+<pre><code>{
+  "five_hour":  { "utilization": 8.0,  "resets_at": "2026-09-21T20:50:00Z",
+                  "limit_dollars": null, "used_dollars": null, "remaining_dollars": null },
+  "seven_day":  { "utilization": 48.0, "resets_at": "2026-09-25T19:00:00Z",
+                  "limit_dollars": null, "used_dollars": null, "remaining_dollars": null },
+
+  "seven_day_breakdown": {
+    "as_of":             "2026-09-21T17:34:17Z",
+    "window_started_at": "2026-09-18T19:00:00Z",
+    "rows": [
+      { "key": "claude_code", "display_name": "Claude Code", "percent": 94 },
+      { "key": "chat",        "display_name": "Chats",       "percent":  0 },
+      { "key": "cowork",      "display_name": "Cowork",      "percent":  6 },
+      { "key": "other",       "display_name": "Other",       "percent":  0 }
+    ]
+  },
+
+  "extra_usage": { "is_enabled": false, "monthly_limit": 2000, "used_credits": 442.0,
+                   "utilization": 22.1, "currency": "USD", "decimal_places": 2,
+                   "disabled_reason": "out_of_credits" },
+
+  "limits": [
+    { "kind": "session",       "group": "session", "percent":  8, "is_active": false },
+    { "kind": "weekly_all",    "group": "weekly",  "percent": 48, "is_active": true  },
+    { "kind": "weekly_scoped", "group": "weekly",  "percent": 19, "is_active": false,
+      "scope": { "model": { "display_name": "Fable" } } }
+  ]
+}</code></pre>
+
+<p>Three of these are directly load-bearing for CLU-3 and none are currently decoded:</p>
+
+<div class="tablewrap">
+<table>
+<thead><tr><th>Field</th><th>Why it matters here</th></tr></thead>
+<tbody>
+<tr>
+  <td><code>seven_day_breakdown.window_started_at</code></td>
+  <td>The <em>exact</em> start of the weekly window. The app currently infers it as
+      <code>resets_at − 7d</code> (<code>UsageSnapshot.compute</code>). The two agreed to the
+      millisecond in this sample, but taking the reported value removes an assumption and gives
+      the transcript scan an exact lower time bound.</td>
+</tr>
+<tr>
+  <td><code>seven_day_breakdown.rows</code></td>
+  <td>Per-surface split of the weekly window. This is the coverage denominator: it tells you
+      what fraction of the week's burn the local transcripts can even see. Answers the ticket's
+      "Claude chat sessions don't provide token information" concern directly — you can't see
+      their tokens, but you can see their share.</td>
+</tr>
+<tr>
+  <td><code>limit_dollars</code> / <code>used_dollars</code> / <code>remaining_dollars</code></td>
+  <td><span class="no">null</span> on this plan — so the API will <em>not</em> hand us the
+      dollar denominator. These fields existing at all suggests some plans/orgs do get them
+      populated; worth a null-check rather than an assumption. If they were ever non-null the
+      whole calibration problem evaporates.</td>
+</tr>
+</tbody>
+</table>
+</div>
+
+<div class="callout warn">
+<span class="lbl">Sharp edge</span>
+<p style="margin:0"><code>extra_usage.used_credits: 442.0</code> is <strong>not</strong> $442. It is
+minor units with <code>decimal_places: 2</code> — <strong>$4.42</strong> of a $20.00 monthly extra-usage
+cap, corroborated by the parallel <code>spend.used.amount_minor: 442, exponent: 2</code>. Anything
+that reads this field must divide.</p>
+</div>
+
+<h2 id="source">3. Where the token counts live</h2>
+
+<p>Claude Code appends one JSON object per line to
+<code>~/.claude/projects/&lt;slugified-cwd&gt;/&lt;session-uuid&gt;.jsonl</code>. Rows with
+<code>"type": "assistant"</code> carry a complete <code>message.usage</code> block:</p>
+
+<pre><code>{
+  "type": "assistant",
+  "timestamp": "2026-09-21T17:32:03.190Z",
+  "requestId": "req_011CfGz1xPq4bHY1apXcbySt",
+  "sessionId": "...", "isSidechain": false, "effort": "high",
+  "message": {
+    "id": "msg_011CfGz1xsqybvM8L8LdpSgC",
+    "model": "claude-opus-5",
+    "usage": {
+      "input_tokens": 2,
+      "cache_creation_input_tokens": 10796,
+      "cache_read_input_tokens": 24671,
+      "output_tokens": 320,
+      "output_tokens_details": { "thinking_tokens": 0 },
+      "server_tool_use": { "web_search_requests": 0, "web_fetch_requests": 0 },
+      "cache_creation": { "ephemeral_1h_input_tokens": 10796,
+                          "ephemeral_5m_input_tokens": 0 },
+      "service_tier": "standard", "speed": "standard"
+    }
+  }
+}</code></pre>
+
+<p>Everything needed for an exact cost is present: per-model, per-request, timestamped, with the
+5-minute / 1-hour cache-write split broken out separately (they are priced differently —
+1.25× vs 2× base input). Subagent traffic is in the same corpus, flagged
+<code>isSidechain: true</code>, and it is <em>not</em> a rounding error: in one overnight run on
+2026-09-21, 1,315 of 1,506 requests were sidechains and accounted for $256 of $311.</p>
+
+<div class="tablewrap">
+<table>
+<thead><tr><th>Property</th><th class="num">Measured</th><th>Note</th></tr></thead>
+<tbody>
+<tr><td>Corpus size</td><td class="num">277 MB</td><td>448 <code>.jsonl</code> files, 4 project dirs</td></tr>
+<tr><td>Assistant rows with <code>usage</code></td><td class="num">35,004</td><td>before dedup</td></tr>
+<tr><td>Distinct API requests</td><td class="num">20,204</td><td>after dedup — see §4</td></tr>
+<tr><td>Full-corpus scan + cost, Python</td><td class="num">0.73 s</td><td>cold-ish page cache; a Swift port and mtime-based incremental scan make this negligible</td></tr>
+<tr><td>Models seen</td><td class="num">6</td><td>opus-5, fable-5, fable-5-1, sonnet-5, haiku-4-5, plus <code>&lt;synthetic&gt;</code></td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="callout warn">
+<span class="lbl">Drop these rows</span>
+<p style="margin:0">Rows with <code>message.model == "&lt;synthetic&gt;"</code> (39 in this corpus) are
+locally-generated placeholders — API error notices, interrupt markers. They carry a
+<code>usage</code> block but cost nothing. Filtering by "model is in the price table" drops them
+for free and also fails loudly on a model ID you haven't priced, which is the behaviour you want.</p>
+</div>
+
+<h2 id="dedup">4. The dedup trap — the single biggest correctness risk</h2>
+
+<p>Claude Code writes <strong>several rows per API response</strong> while streaming. Each has its
+own <code>uuid</code> but the same <code>message.id</code> and <code>requestId</code>, and the
+token fields grow across them. Forking or resuming a session copies history into a new file, so
+the same request can also appear under several <code>sessionId</code>s. In this corpus, 35,004
+rows collapse to 20,204 real requests — <strong>73% inflation if you just sum.</strong></p>
+
+<p>There are three candidate policies and only one is right. Measured over the whole corpus:</p>
+
+<div class="tablewrap">
+<table>
+<thead>
+<tr>
+  <th>Token field</th>
+  <th class="num">naive sum</th>
+  <th class="num">first-wins</th>
+  <th class="num">per-field max ✓</th>
+</tr>
+</thead>
+<tbody>
+<tr><td><code>input_tokens</code></td>
+    <td class="num">107,492 <span class="no">+93%</span></td>
+    <td class="num">55,652</td><td class="num">55,652</td></tr>
+<tr><td><code>cache_creation_input_tokens</code></td>
+    <td class="num">134,230,243 <span class="no">+121%</span></td>
+    <td class="num">60,746,483</td><td class="num">60,746,483</td></tr>
+<tr><td><code>cache_read_input_tokens</code></td>
+    <td class="num">6,787,764,019 <span class="no">+62%</span></td>
+    <td class="num">4,189,360,597</td><td class="num">4,189,360,597</td></tr>
+<tr><td><code>output_tokens</code></td>
+    <td class="num">18,298,440 <span class="no">+52%</span></td>
+    <td class="num">5,768,891 <span class="no">−52%</span></td>
+    <td class="num">12,055,611</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="callout bad">
+<span class="lbl">The non-obvious half</span>
+<p style="margin:0 0 .5rem"><strong>First-wins dedup — the obvious fix, and what ccusage shipped for a
+while — silently loses 52% of output tokens.</strong> 7,317 of 20,204 request groups (36.2%) have a
+first row whose <code>output_tokens</code> is an intermediate streaming snapshot rather than the
+final count. The input and cache fields are identical across rows in a group; only
+<code>output_tokens</code> grows.</p>
+<p style="margin:0">Correct policy: <strong>group by <code>(message.id, requestId)</code>, take the
+per-field maximum.</strong> Fall back to a session-scoped key for the handful of rows with no
+<code>requestId</code> (7 rows here). This is the same conclusion ccusage reached after
+<a href="https://github.com/ccusage/ccusage/issues/1762">a 2× regression</a> and
+<a href="https://github.com/ccusage/ccusage/pull/1765">a cross-session dedup fix</a>.</p>
+</div>
+
+<p>On this machine the dollar impact of the output-token half is modest — output is 2–13% of the
+bill because cache reads dominate (§5) — but it is a 52% error on the one number a user would
+most expect to be right, and it costs nothing to avoid.</p>
+
+<h2 id="pricing">5. Turning tokens into dollars, and proving the formula</h2>
+
+<p>Public list prices, fetched 2026-09-21 from
+<a href="https://platform.claude.com/docs/en/about-claude/pricing">platform.claude.com/docs/en/about-claude/pricing</a>.
+Only the models seen on this machine are listed; a real implementation needs a table it can
+extend, plus a loud failure for unknown model IDs.</p>
+
+<div class="tablewrap">
+<table>
+<thead>
+<tr><th>Model</th><th class="num">Input</th><th class="num">5m cache write</th>
+    <th class="num">1h cache write</th><th class="num">Cache read</th><th class="num">Output</th></tr>
+</thead>
+<tbody>
+<tr><td><code>claude-opus-5</code></td><td class="num">$5.00</td><td class="num">$6.25</td><td class="num">$10.00</td><td class="num">$0.50</td><td class="num">$25.00</td></tr>
+<tr><td><code>claude-fable-5</code></td><td class="num">$10.00</td><td class="num">$12.50</td><td class="num">$20.00</td><td class="num">$1.00</td><td class="num">$50.00</td></tr>
+<tr><td><code>claude-fable-5-1</code></td><td class="num">$10.00</td><td class="num">$12.50</td><td class="num">$20.00</td><td class="num">$0.25</td><td class="num">$50.00</td></tr>
+<tr><td><code>claude-sonnet-5</code></td><td class="num">$2.00</td><td class="num">$2.50</td><td class="num">$4.00</td><td class="num">$0.20</td><td class="num">$10.00</td></tr>
+<tr><td><code>claude-haiku-4-5</code></td><td class="num">$1.00</td><td class="num">$1.25</td><td class="num">$2.00</td><td class="num">$0.10</td><td class="num">$5.00</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>Cache reads are normally 0.1× base input. <strong>Fable 5.1 is the exception at 0.025×</strong>
+($0.25/MTok, not $1.00) — a table that assumes a uniform 0.1× multiplier overcharges Fable 5.1
+cache reads by 4×. Web search adds $10 per 1,000 searches on top
+(<code>usage.server_tool_use.web_search_requests</code>); web fetch is free.</p>
+
+<h3>The formula is provably right</h3>
+
+<p>Ran one request under Claude Code's own OpenTelemetry console exporter and compared its
+<code>claude_code.cost.usage</code> against the cost derived from the transcript row for the same
+request:</p>
+
+<div class="tablewrap">
+<table>
+<thead><tr><th>Source</th><th class="num">USD</th><th>Detail</th></tr></thead>
+<tbody>
+<tr><td>Claude Code, <code>claude_code.cost.usage</code></td><td class="num">0.0206061</td>
+    <td>haiku-4-5, <code>query_source: main</code></td></tr>
+<tr><td>Derived from transcript <code>usage</code> × list price</td><td class="num">0.0206061</td>
+    <td>in 10, out 60, cacheRead 13,701, cacheWrite&nbsp;1h 9,463</td></tr>
+<tr class="total"><td>Difference</td><td class="num">0.0000000</td><td><span class="yes">exact</span></td></tr>
+</tbody>
+</table>
+</div>
+
+<p>Decomposing confirms it term by term: 10&nbsp;×&nbsp;$1 + 60&nbsp;×&nbsp;$5 +
+13,701&nbsp;×&nbsp;$0.10 + 9,463&nbsp;×&nbsp;<strong>$2.00</strong> per MTok. That last rate is the
+<em>1-hour</em> cache-write price, which is only reachable by reading
+<code>usage.cache_creation.ephemeral_1h_input_tokens</code> rather than the flat
+<code>cache_creation_input_tokens</code>. <strong>Claude Code prices the 5m and 1h cache writes
+separately and so must we.</strong></p>
+
+<p>Independent cross-check: <code>npx ccusage daily --since 20260918</code> reports
+<strong>$399.91</strong> for the current weekly window against this spike's
+<strong>$398.99</strong> — 0.2% apart, entirely explained by ccusage bucketing on local calendar
+days while the window starts at 19:00Z mid-day Friday.</p>
+
+<div class="callout ok">
+<span class="lbl">Cache reads are the bill</span>
+<p style="margin:0">Across the six weeks measured, <strong>cache reads are 55–87% of the
+list-price dollar</strong> — 87% in the current week. Output tokens are 2–13%. Any summary that
+leads with "tokens" without separating cache reads will mislead badly, and any modelling of how
+the plan weights usage has to get the cache-read term right first because everything else is
+noise next to it.</p>
+</div>
+
+<h2 id="hooks">6. Hooks: the answer is no. OTel: the answer is yes.</h2>
+
+<p>The ticket asks whether Claude Code hooks can feed this. <strong>They cannot supply token or
+cost data.</strong> Checked every event in
+<a href="https://code.claude.com/docs/en/hooks">code.claude.com/docs/en/hooks</a>:</p>
+
+<div class="tablewrap">
+<table>
+<thead><tr><th>Event</th><th>Tokens / cost?</th><th>Carries <code>transcript_path</code>?</th><th>Useful as a trigger?</th></tr></thead>
+<tbody>
+<tr><td><code>Stop</code></td><td class="no">no</td><td class="yes">yes</td><td>Best fit — fires when a turn completes; hand the transcript path to a scanner</td></tr>
+<tr><td><code>SessionEnd</code></td><td class="no">no</td><td class="yes">yes</td><td>Coarser; good for a final reconciliation</td></tr>
+<tr><td><code>SessionStart</code></td><td class="no">no</td><td class="yes">yes</td><td>Only event carrying <code>model</code></td></tr>
+<tr><td><code>PostToolUse</code>, <code>PostToolBatch</code></td><td class="no">no</td><td class="yes">yes</td><td>Too chatty for this</td></tr>
+<tr><td><code>SubagentStop</code></td><td class="no">no</td><td class="yes">yes</td><td>Subagent completion; sidechain rows are already in the main transcript anyway</td></tr>
+<tr><td><code>PreCompact</code> / <code>PostCompact</code></td><td class="no">no</td><td class="yes">yes</td><td>—</td></tr>
+<tr><td>all others</td><td class="no">no</td><td>varies</td><td>—</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>So a hook can only ever say <em>"something happened, here is where to look"</em>. The docs say
+as much: for billing/usage tracking they point at OpenTelemetry, correlated by
+<code>prompt_id</code>.</p>
+
+<h3>OpenTelemetry does carry it — verified live</h3>
+
+<p>With <code>CLAUDE_CODE_ENABLE_TELEMETRY=1</code> and
+<code>OTEL_METRICS_EXPORTER=console</code>, Claude Code emits, after every API request:</p>
+
+<ul>
+  <li><code>claude_code.cost.usage</code> — <strong>unit USD</strong>, a counter, attributed by
+      <code>model</code>, <code>query_source</code> (<code>main</code>/<code>subagent</code>/<code>auxiliary</code>),
+      <code>session.id</code>, and optionally <code>effort</code>, <code>speed</code>,
+      <code>agent.name</code>, <code>skill.name</code>.</li>
+  <li><code>claude_code.token.usage</code> — same attributes plus
+      <code>type ∈ {input, output, cacheRead, cacheCreation}</code>.</li>
+  <li>Also <code>claude_code.session.count</code>, <code>claude_code.active_time.total</code>.</li>
+</ul>
+
+<div class="callout warn">
+<span class="lbl">Why this spike does not recommend OTel as the data path</span>
+<ul style="margin:0">
+  <li>It is <strong>opt-in and prospective</strong>. Turning it on today tells you nothing about
+      last week. The transcripts are already six weeks deep.</li>
+  <li>It requires the user to export env vars into every shell that launches <code>claude</code>,
+      or set them globally — a real install burden for a menu-bar widget that today needs nothing
+      but a Keychain read.</li>
+  <li>Collecting it means running a collector (<code>otlp</code>/<code>prometheus</code>) or
+      scraping console output. <code>console</code> writes to the CLI's own stdout, which is not
+      capturable from another process.</li>
+  <li>The metric payload includes <code>user.email</code>, <code>user.account_id</code>,
+      <code>organization.id</code> — this repo's stated posture is that nothing sensitive is
+      written to disk or logs. Routing it anywhere needs care.</li>
+  <li><strong>It is not more accurate.</strong> §5 shows the transcript-derived figure equals
+      <code>claude_code.cost.usage</code> exactly — because they compute it the same way.</li>
+</ul>
+</div>
+
+<p>OTel's real value here is as the <strong>oracle</strong>: it is Claude Code's own answer, so it
+is the right thing to validate a transcript-based implementation against in a test, exactly as
+done in §5. It is also the only source that attributes cost to <code>skill.name</code> /
+<code>agent.name</code>, which the transcripts do not — relevant only if per-skill attribution is
+ever wanted.</p>
+
+<h2 id="tools">7. The open-source tool the ticket half-remembered: ccusage</h2>
+
+<p>The ticket says "there's some common open-source tool for this but I'm not sure which". It is
+<strong><a href="https://github.com/ccusage/ccusage">ccusage</a></strong> (<code>npx ccusage</code>).</p>
+
+<div class="tablewrap">
+<table>
+<thead><tr><th>Aspect</th><th>ccusage</th><th>Relevance to CLU-3</th></tr></thead>
+<tbody>
+<tr><td>Data source</td><td>The same <code>~/.claude/projects/**/*.jsonl</code> transcripts</td>
+    <td>Confirms the approach; no API key, nothing uploaded</td></tr>
+<tr><td>Cost</td><td>Computed from token counts × a pricing table (LiteLLM-sourced), with modes to prefer a logged cost field where present</td>
+    <td>Same method as §5</td></tr>
+<tr><td>Dedup</td><td><code>message.id</code> + <code>requestId</code>; has churned through first-wins bugs and cross-session copies</td>
+    <td>Independent confirmation of §4, including the failure modes</td></tr>
+<tr><td>Views</td><td><code>daily</code>, <code>weekly</code>, <code>monthly</code>, <code>session</code>, <code>blocks</code> (5-hour billing windows), <code>--json</code>, MCP server, statusline</td>
+    <td>Its <code>blocks</code> view is the closest existing thing to this widget's session ring</td></tr>
+<tr><td>What it does <em>not</em> do</td><td>It never reads the OAuth usage endpoint</td>
+    <td><strong>This is the gap CLU-3 fills.</strong> ccusage knows dollars but not percent; this widget knows percent but not dollars. Nothing joins them.</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>Used here as an independent check (§5) and it agreed to 0.2%. Worth keeping as a validation
+target rather than a dependency — shelling out to <code>npx</code> from a menu-bar agent would add
+a Node requirement to a project that currently has none, and its dedup semantics have moved
+repeatedly.</p>
+
+<h2 id="calibration">8. The calibration experiment and what it showed</h2>
+
+<p>Two live polls of the usage endpoint, with the transcript-derived cost over the exact same
+windows.</p>
+
+<h3>Weekly window — usable</h3>
+
+<div class="tablewrap">
+<table>
+<thead><tr><th>Quantity</th><th class="num">Value</th><th>Source</th></tr></thead>
+<tbody>
+<tr><td>Window start</td><td class="num">2026-09-18T19:00:00Z</td><td><code>seven_day_breakdown.window_started_at</code></td></tr>
+<tr><td>Observed at</td><td class="num">2026-09-21T17:34:17Z</td><td><code>as_of</code></td></tr>
+<tr><td><code>seven_day.utilization</code></td><td class="num">48%</td><td>endpoint</td></tr>
+<tr><td>Claude Code share of that</td><td class="num">94%</td><td><code>seven_day_breakdown</code></td></tr>
+<tr><td>⇒ percentage points attributable to Claude Code</td><td class="num">45.12 pp</td><td>48 × 0.94</td></tr>
+<tr><td>Transcript cost over the same window</td><td class="num">$396.47</td><td>2,074 requests, deduped</td></tr>
+<tr class="total"><td>Implied rate</td><td class="num">$8.79 / pp</td><td></td></tr>
+<tr class="total"><td>Implied full weekly window</td><td class="num">≈ $879</td><td></td></tr>
+</tbody>
+</table>
+</div>
+
+<p>Both percentages are integers, so the rate carries roughly ±2%: $8.51–$8.90 per point.
+At this magnitude that is fine.</p>
+
+<h3>Session (5-hour) window — not usable</h3>
+
+<div class="tablewrap">
+<table>
+<thead><tr><th class="num">Poll</th><th class="num">5h utilization</th><th class="num">Cost in window to that instant</th><th class="num">Implied $/pp</th></tr></thead>
+<tbody>
+<tr><td class="num">17:34:17Z</td><td class="num">8%</td><td class="num">$1.41</td><td class="num">$0.18</td></tr>
+<tr><td class="num">17:40:26Z</td><td class="num">9%</td><td class="num">$4.03</td><td class="num">$0.45</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>Six minutes and $2.62 apart, the implied rate moves by <strong>2.5×</strong>. Two causes, both
+structural:</p>
+<ul>
+  <li><strong>Integer rounding.</strong> At single-digit percentages, ±0.5 pp is a ±6% error on the
+      denominator before anything else goes wrong.</li>
+  <li><strong>Server-side accounting lag.</strong> The endpoint's figure trails actual spend. The
+      $2.62 burned between the polls barely moved the needle, which is consistent with the reading
+      reflecting a state some minutes old.</li>
+</ul>
+
+<p class="callout warn" style="display:block"><span class="lbl">Consequence</span>
+Calibrate against the <strong>weekly</strong> window only. The session ring is for display; it is
+too small and too laggy to divide by.</p>
+
+<h3>Raw measured spend, six weeks</h3>
+
+<p>Transcript cost per weekly window, bucketed on the Friday 19:00Z boundary. These are direct
+measurements — no assumption about the plan is involved:</p>
+
+<div class="tablewrap">
+<table>
+<thead><tr><th>Week starting</th><th class="num">Requests</th><th class="num">List-price cost</th><th class="num">Cache read as % of $</th></tr></thead>
+<tbody>
+<tr><td>2026-08-14</td><td class="num">218</td><td class="num">$14.94</td><td class="num">55%</td></tr>
+<tr><td>2026-08-21</td><td class="num">4,747</td><td class="num">$615.50</td><td class="num">75%</td></tr>
+<tr><td>2026-08-28</td><td class="num">7,639</td><td class="num">$1,211.06</td><td class="num">72%</td></tr>
+<tr><td>2026-09-04</td><td class="num">4,898</td><td class="num">$674.80</td><td class="num">63%</td></tr>
+<tr><td>2026-09-11</td><td class="num">569</td><td class="num">$50.38</td><td class="num">65%</td></tr>
+<tr><td>2026-09-18 <em>(partial)</em></td><td class="num">2,098</td><td class="num">$398.99</td><td class="num">87%</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>Only the last four weeks overlap the widget's log, so only those four can be paired with a
+utilization reading.</p>
+
+<h3 id="devaluation">Is the weekly allowance shrinking? The direct measurement</h3>
+
+<p>This is the question the ticket actually exists to answer, and it needs
+<em>independently measured</em> pairs of (utilization, cost) — one per week. Extrapolating a
+single week's rate backwards cannot detect a change in that rate; it assumes the answer.</p>
+
+<div class="callout ok">
+<span class="lbl">The history exists after all</span>
+<p style="margin:0">The widget has been writing
+<code>Snapshot: session=… weekly=NN.N% (elapsed …)</code> to
+<code>~/Library/Application Support/claude-usage-menu-bar/claude-usage.log</code> every two
+minutes since <strong>2026-09-03</strong> — <strong>4,969 usable observations across four weekly
+windows</strong>, and the rotated <code>.1.log</code> extends it further back. The
+<code>elapsed</code> fraction recovers each window's start time, so every line can be joined to
+the transcript cost accumulated since that start. No new instrumentation was needed to get this
+far; it was a side effect of ordinary logging.</p>
+</div>
+
+<p>For each window: the highest utilization observed, and the local Claude Code dollars accrued
+from the window's start up to that same instant.</p>
+
+<div class="tablewrap">
+<table>
+<thead>
+<tr><th>Window start</th><th class="num">Peak util.</th><th class="num">Local $ at that instant</th>
+    <th class="num">$/pp (lower bound)</th><th>Model mix by $</th></tr>
+</thead>
+<tbody>
+<tr><td>2026-08-28 19:00Z</td><td class="num">72%</td><td class="num">$1,193.15</td>
+    <td class="num"><span class="warn">≥ $16.57</span></td>
+    <td>opus-5 73%, <strong>fable-5 23%, fable-5.1 4%</strong></td></tr>
+<tr><td>2026-09-04 19:00Z</td><td class="num">98%</td><td class="num">$669.03</td>
+    <td class="num">≥ $6.83</td><td>opus-5 89%, fable-5.1 10%, sonnet-5 1%</td></tr>
+<tr><td>2026-09-11 19:00Z</td><td class="num">69%</td><td class="num">$50.38</td>
+    <td class="num">≥ $0.73</td><td>opus-5 97%, haiku 1%, sonnet-5 1%</td></tr>
+<tr><td>2026-09-18 19:00Z <em>(current)</em></td><td class="num">48%</td><td class="num">$395.06</td>
+    <td class="num"><span class="yes">= $8.76</span></td><td>opus-5 100%</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>Only the last row is an equality, because it is the only window whose coverage is known
+(<code>seven_day_breakdown</code> says 94% Claude Code, so
+$395.06 ÷ (48 × 0.94) = $8.76). The others are <strong>lower bounds</strong>: they assume every
+percentage point came from local Claude Code, and since real coverage is below 100%, the true
+rate is <em>higher</em> than shown.</p>
+
+<h4>These numbers are not comparable to each other</h4>
+
+<p>The table above compares windows at different stages of completion, and that turns out to
+invalidate the comparison. <strong>The estimate is strongly biased by how far through a window you
+measure it</strong> — see §11, where refitting the one full-span window at successive cut-offs
+gives $22.09/pp at 10% utilization, $7.65 at 50%, and $5.23 at 98%. A window observed half-way
+through reports roughly 50% high.</p>
+
+<p>Refitting every window over the <em>identical</em> 0.5→47.5% span (the furthest the current
+window has reached) removes that bias:</p>
+
+<div class="tablewrap">
+<table>
+<thead><tr><th>Window</th><th class="num">Ticks in span</th><th class="num">$/pp over 0.5→47.5%</th><th class="num">±1σ</th></tr></thead>
+<tbody>
+<tr><td>2026-09-04</td><td class="num">42</td><td class="num">$7.96</td><td class="num">±0.49</td></tr>
+<tr><td>2026-09-18 <em>(current)</em></td><td class="num">33</td><td class="num">$7.99</td><td class="num">±0.97</td></tr>
+<tr><td>2026-09-11</td><td class="num">25</td><td class="num"><span class="no">$0.95</span></td><td class="num">±0.09</td>
+</tr>
+<tr><td>2026-08-28</td><td class="num">4</td><td class="num" colspan="2">no overlap — the log starts mid-window</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="callout ok">
+<span class="lbl">Result</span>
+<p style="margin:0"><strong>$7.96 vs $7.99 — the two comparable windows are indistinguishable.</strong>
+The apparent devaluation in the previous table was an artifact of comparing a half-finished window
+against a complete one. On the evidence available there is <strong>no sign that the weekly
+allowance changed</strong> between 2026-09-04 and now.</p>
+</div>
+
+<ul>
+  <li><strong>2026-09-11 remains the warning.</strong> $0.95/pp — an apparent 8× collapse in plan
+      generosity that is really just $50 of local spend against a week largely spent elsewhere.
+      Without the coverage figure this window would have been read as a catastrophic silent cut.
+      It is the single strongest argument for logging <code>seven_day_breakdown</code>.</li>
+  <li><strong>2026-08-28 cannot be judged.</strong> The log begins mid-window at 44%, so there is
+      no overlap with the low-utilization span the others share. Its ≥$16.57 bound is also the
+      Fable-heavy one (27% of its dollars at 2× Opus list price). Unusable either way.</li>
+</ul>
+
+<div class="callout bad">
+<span class="lbl">Why this cannot be settled yet</span>
+<p style="margin:0 0 .5rem">Each window yields one equation in two unknowns:</p>
+<pre style="margin:.5rem 0"><code>local_dollars  =  k_w  ×  utilization  ×  coverage_w</code></pre>
+<p style="margin:0">— where <code>k_w</code> is the rate we want and <code>coverage_w</code> is
+Claude Code's share of that week. Four windows, four equations, eight unknowns. <strong>A
+shrinking <code>k</code> and a falling <code>coverage</code> are the same observation.</strong>
+The fix is not more cleverness, it is one more logged field:
+<code>seven_day_breakdown.rows</code> pins <code>coverage_w</code> and collapses the system to one
+unknown per week.</p>
+</div>
+
+<h4>Three confounders any future comparison has to control</h4>
+
+<ol>
+  <li><strong>Coverage</strong> — as above. Fixed by logging the breakdown.</li>
+  <li><strong>Model mix.</strong> Comparing a Fable-heavy week to an Opus-only week compares
+      list-price ratios, not plan generosity. Either compare like-for-like weeks, or accumulate
+      enough windows to fit per-model coefficients. The separate <code>weekly_scoped</code> Fable
+      cap is a hint that the plan does not treat models interchangeably.</li>
+  <li><strong>List prices move.</strong> A cut to Opus's public price would drop $/pp with no
+      change whatsoever to the allowance — the metric would report a devaluation that did not
+      happen. <strong>Denominate the series in a frozen price table</strong> (snapshot the rates,
+      version them, keep using the old one for the historical series) so the unit stays fixed.
+      This matters: Sonnet 5's price changed within the period these transcripts cover.</li>
+</ol>
+
+<div class="callout warn">
+<span class="lbl">Windows that max out read low</span>
+<p style="margin:0">Spend past 100% is billed to extra-usage credits and does <em>not</em> advance
+the percentage, so a window that hits the cap accumulates local dollars against a frozen
+denominator and reports an inflated $/pp. None of the four windows above reached 100% (peak 98%),
+so none is affected here — but the estimator must exclude maxed-out windows, and
+<code>extra_usage.used_credits</code> is the flag for detecting them.</p>
+</div>
+
+<h2 id="coverage">9. Coverage: what the transcripts can never see</h2>
+
+<p>The ticket predicted "something exhaustive probably isn't possible". Correct — and the endpoint
+quantifies the gap for you.</p>
+
+<div class="tablewrap">
+<table>
+<thead><tr><th>Surface</th><th class="num">Share of current week</th><th>Visible in local transcripts?</th></tr></thead>
+<tbody>
+<tr><td>Claude Code (incl. subagents, Claude Desktop's Claude Code)</td><td class="num">94%</td><td class="yes">yes</td></tr>
+<tr><td>Cowork</td><td class="num">6%</td><td class="no">no</td></tr>
+<tr><td>Chats (claude.ai)</td><td class="num">0%</td><td class="no">no</td></tr>
+<tr><td>Other</td><td class="num">0%</td><td class="no">no</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>Two pieces of corroborating evidence that the 6% is real and really invisible:</p>
+<ul>
+  <li>The <code>weekly_scoped</code> Fable cap reads <strong>19%</strong> for the current window,
+      yet there is <strong>zero</strong> Fable usage in the local transcripts in that window — the
+      last local Fable request was 2026-09-10, two windows ago. Something off-machine used Fable
+      this week; Cowork is the obvious candidate.</li>
+  <li>This is the general failure mode: usage on a second machine, on the web, or on a surface
+      with no local log is structurally invisible. There is no fix, only disclosure.</li>
+</ul>
+
+<p>So any feature built on this must present a Claude-Code-attributed figure and say so, using
+<code>seven_day_breakdown</code> to state the covered fraction rather than implying totality.
+When Claude Code's share drops, the estimate's authority drops with it — and the widget knows
+by how much.</p>
+
+<h2 id="open">10. Open questions a follow-up must resolve</h2>
+
+<dl class="qa">
+<dt>Is the dollars→percent relationship linear <em>within</em> a week?</dt>
+<dd>Untested. Resolvable in one week: log <code>(capturedAt, seven_day.utilization,
+cumulative $ since window_started_at)</code> on every poll the widget already makes (every 1–5
+minutes) and check the fit. A straight line through the origin means the model holds; curvature or
+a step means it does not.</dd>
+
+<dt>Is the rate stable <em>across</em> weeks — i.e. is the allowance being quietly cut?</dt>
+<dd>The central question, and §8 gets partway: four windows recovered from the widget's log, three
+consistent at $7–9/pp and one (2026-08-28) implying ≥$16.57/pp. Not settled, because that window
+is also the Fable-heavy one. <strong>Settling it needs the per-surface breakdown logged alongside
+the percentage</strong> — without <code>coverage_w</code> the system is underdetermined. Note the
+endpoint returns only the current window and <code>SnapshotCache</code>
+(<code>usage-backup.json</code>) keeps only the last reading, so the <em>log file</em> is the sole
+historical record and it starts 2026-09-03. It is also rotated and will eventually be lost: the
+calibration series deserves its own append-only file, not a side effect of a rotating log.</dd>
+
+<dt>Are cache reads weighted the same by plan accounting as by list price?</dt>
+<dd>The highest-leverage sub-question, since cache reads are 55–87% of the dollar. Testable once
+several weeks of logged pairs exist: fit percentage against the four token classes separately and
+see whether the recovered cache-read coefficient matches 0.1× base input.</dd>
+
+<dt>Do <code>limit_dollars</code> / <code>used_dollars</code> ever become non-null?</dt>
+<dd>They are null on this plan today. If they ever populate, they are the ground truth and the
+whole calibration problem disappears. Cheap to watch for — one null check in the poller.</dd>
+
+<dt>Does the app's inferred window start ever disagree with <code>window_started_at</code>?</dt>
+<dd>They matched to the millisecond in this sample. Worth asserting rather than assuming, because
+an off-by-one-window start silently ruins every cost figure downstream.</dd>
+</dl>
+
+<h2 id="shape">11. The system going forward</h2>
+
+<p>This is the part that matters: a design that records, week after week, <em>"what dollar value of
+weekly usage is my cap, and is it different this week from last week?"</em> — and an honest account
+of how precisely it can answer.</p>
+
+<h3>The estimator: tick crossings, not end-of-week readings</h3>
+
+<p>The endpoint reports utilization as an integer. That looks like a precision ceiling but is
+actually an opportunity: <strong>when the reported value steps from <code>n</code> to
+<code>n+1</code>, the true utilization crossed <code>n+0.5</code> at that instant.</strong> Each
+tick is therefore a sharp observation, and a week that runs to 98% yields ~98 of them rather than
+one.</p>
+
+<pre><code>for each tick (reported n → n+1 between polls at t₀, t₁):
+    x = n + 0.5                                   # true utilization at the crossing
+    y = Σ cost(requests in [window_start, t₁])    # cumulative local spend
+
+fit  y = slope·x + intercept
+     slope     → dollars per percentage point, ×coverage
+     intercept → absorbs the endpoint's accounting lag (a roughly constant offset)
+
+dollars_per_point = slope / claude_code_share
+weekly_cap_value  = dollars_per_point × 100</code></pre>
+
+<p>Fitted on the four recoverable windows this yields a slope with a 4.5–13% standard error, and
+the intercept does real work — it ranged from −$99 to +$1,140 across windows, i.e. the lag is
+large and ignoring it would bias the slope badly.</p>
+
+<h3>Feasibility: how good is the answer, and when?</h3>
+
+<p>The single most important measured result. Refitting the one full-span window (2026-09-04, 68
+ticks) using only the ticks up to a given utilization:</p>
+
+<div class="tablewrap">
+<table>
+<thead><tr><th class="num">Fit using ticks up to</th><th class="num">n</th><th class="num">$/pp</th>
+    <th class="num">reported ±1σ</th><th class="num">true error vs full window</th></tr></thead>
+<tbody>
+<tr><td class="num">10%</td><td class="num">10</td><td class="num">$22.09</td><td class="num">±4.3%</td><td class="num"><span class="no">+322%</span></td></tr>
+<tr><td class="num">20%</td><td class="num">20</td><td class="num">$14.76</td><td class="num">±7.0%</td><td class="num"><span class="no">+182%</span></td></tr>
+<tr><td class="num">30%</td><td class="num">30</td><td class="num">$11.15</td><td class="num">±5.7%</td><td class="num"><span class="no">+113%</span></td></tr>
+<tr><td class="num">40%</td><td class="num">39</td><td class="num">$9.13</td><td class="num">±5.3%</td><td class="num"><span class="no">+75%</span></td></tr>
+<tr><td class="num">50%</td><td class="num">43</td><td class="num">$7.65</td><td class="num">±6.4%</td><td class="num"><span class="warn">+46%</span></td></tr>
+<tr><td class="num">60%</td><td class="num">44</td><td class="num">$7.11</td><td class="num">±7.1%</td><td class="num"><span class="warn">+36%</span></td></tr>
+<tr><td class="num">70%</td><td class="num">51</td><td class="num">$4.86</td><td class="num">±8.7%</td><td class="num"><span class="yes">−7%</span></td></tr>
+<tr><td class="num">80%</td><td class="num">60</td><td class="num">$4.90</td><td class="num">±6.1%</td><td class="num"><span class="yes">−6%</span></td></tr>
+<tr><td class="num">90%</td><td class="num">65</td><td class="num">$5.22</td><td class="num">±5.1%</td><td class="num"><span class="yes">−0.1%</span></td></tr>
+<tr><td class="num">98%</td><td class="num">68</td><td class="num">$5.23</td><td class="num">±4.5%</td><td class="num">—</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="callout bad">
+<span class="lbl">Two hard constraints fall out of this</span>
+<ol style="margin:0">
+  <li><strong>The estimate only converges past ~70% utilization.</strong> Below that it is biased
+      high, severely so early on. A week you only drive to 30% yields no usable measurement of the
+      cap — you simply do not learn the denominator until you approach it.</li>
+  <li><strong>The regression's own error bars are dangerously overconfident.</strong> At the 20%
+      cut-off it reports ±7% while being 182% wrong. The residual scatter is not the error; the
+      span is. <em>Never surface the reported σ as the confidence.</em> Gate on utilization
+      reached, and compare only over matched spans.</li>
+</ol>
+</div>
+
+<p>Once both constraints are respected the method is solid: the like-for-like comparison in §8
+(two windows, identical 0.5→47.5% span) agreed to <strong>0.4%</strong> — $7.96 vs $7.99.</p>
+
+<h4>So: what can it actually detect, and how fast?</h4>
+
+<div class="tablewrap">
+<table>
+<thead><tr><th>Question</th><th>Answer</th></tr></thead>
+<tbody>
+<tr><td>First usable cap estimate</td>
+    <td>End of the first window that reaches ~70%+ utilization. If you routinely run the plan hot,
+        that is <strong>one week</strong>; if not, whenever it next happens.</td></tr>
+<tr><td>First week-over-week comparison</td>
+    <td><strong>Two such windows</strong> — so ~2 weeks of heavy use, longer if light weeks
+        intervene. Light weeks are not data points.</td></tr>
+<tr><td>Precision on a full-span window</td>
+    <td>~±5% (1σ) from the fit, plus the coverage figure's own integer rounding (~±0.5%).</td></tr>
+<tr><td>Smallest detectable week-over-week change</td>
+    <td>Roughly <strong>±15–20%</strong> at 2σ on a matched pair of full windows. Enough to catch a
+        silent quarter-cut quickly; <em>not</em> enough to resolve a 5% drift.</td></tr>
+<tr><td>Confounder that dominates everything else</td>
+    <td>Model mix (§8). A Fable-heavy week is not comparable to an Opus week at all.</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>What to record, on every poll</h3>
+
+<p>One append-only line per poll, numbers only. The widget already polls every 1–5 minutes, so
+this is nearly free:</p>
+
+<pre><code>{
+  "capturedAt":        "2026-09-21T17:34:17Z",
+  "windowStartedAt":   "2026-09-18T19:00:00Z",   // seven_day_breakdown, not inferred
+  "weeklyPct":         48,
+  "sessionPct":        8,
+  "surfaceShares":     { "claude_code": 94, "cowork": 6, "chat": 0, "other": 0 },
+  "scopedPct":         { "Fable": 19 },
+  "costSinceWindowStart": 396.47,
+  "costByModel":       { "claude-opus-5": 396.00, "claude-haiku-4-5": 0.39 },
+  "tokensByClass":     { "input": …, "cacheWrite5m": …, "cacheWrite1h": …,
+                         "cacheRead": …, "output": … },
+  "extraUsageCredits": 442,                      // minor units - flags maxed-out windows
+  "priceTableVersion": "2026-09-21"
+}</code></pre>
+
+<p>Five fields are load-bearing and each is easy to leave out:</p>
+
+<div class="tablewrap">
+<table>
+<thead><tr><th>Field</th><th>Why the system breaks without it</th></tr></thead>
+<tbody>
+<tr><td><code>surfaceShares</code></td>
+    <td><strong>The one that makes it work at all.</strong> Without it the system is
+        underdetermined and the 2026-09-11 window reports an 8× silent cut that never happened.</td></tr>
+<tr><td><code>priceTableVersion</code></td>
+    <td>A public price cut would drop $/pp with no change to the allowance — a devaluation that
+        did not occur. Freeze the rates, version them, keep using the old table for the historical
+        series. Sonnet 5's price already changed inside the period these transcripts cover.</td></tr>
+<tr><td><code>costByModel</code></td>
+    <td>Lets a later analysis control for, or fit, per-model weighting — the dominant confounder.</td></tr>
+<tr><td><code>tokensByClass</code></td>
+    <td>Cache reads are 55–87% of the dollar. Keeping the classes separate is what makes it
+        possible to later test whether the plan weights them the way list price does.</td></tr>
+<tr><td><code>extraUsageCredits</code></td>
+    <td>Flags a window that maxed out, whose $/pp is inflated and must be excluded.</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="callout warn">
+<span class="lbl">Do not rely on claude-usage.log</span>
+<p style="margin:0">It carries the history today by accident, and §8 only exists because of that.
+But it rotates (<code>claude-usage.1.log</code> is already the overflow) and will silently lose
+the series. The calibration log needs its own append-only file with no rotation, or rotation that
+preserves it.</p>
+</div>
+
+<h3>Pieces, and where they go in this repo</h3>
+
+<ol>
+  <li><strong><code>TranscriptScanner</code></strong> (new, <code>ClaudeUsageCore</code>) — walks
+      <code>~/.claude/projects/**/*.jsonl</code>, keeps <code>type == "assistant"</code> rows with
+      a <code>usage</code> block and a known model, groups by
+      <code>(message.id, requestId)</code>, takes the per-field max (§4), prices with the frozen
+      table including the 5m/1h cache-write split and Fable 5.1's 0.025× cache read (§5).
+      Incremental by file mtime + byte offset; a full cold scan is 0.73 s anyway.</li>
+  <li><strong><code>UsageResponse</code> additions</strong> — decode
+      <code>seven_day_breakdown</code> (window start + surface shares) and the
+      <code>limit_dollars</code>/<code>used_dollars</code> nullables. Small and additive; useful on
+      its own even if nothing else ships. <em>If those dollar fields ever go non-null, they are
+      ground truth and the entire estimator becomes unnecessary</em> — worth a check that says so
+      loudly.</li>
+  <li><strong><code>CalibrationLog</code></strong> (new) — appends the record above on each poll,
+      alongside the existing <code>SnapshotCache</code> write in <code>UsageEngine</code>.</li>
+  <li><strong><code>CapEstimator</code></strong> (new) — tick extraction, the two-parameter fit,
+      the utilization gate, matched-span comparison against prior windows.</li>
+  <li><strong>Surfacing</strong> — a line in the popover, e.g. <em>"This week's cap ≈ $850 of API
+      usage · last week $846 · no change"</em>, and explicitly <em>"not enough of the window used
+      yet"</em> until the gate passes. Given the bias table above, showing a number early would be
+      worse than showing nothing.</li>
+  <li><strong>Tests</strong> — a fixture of transcript rows whose expected cost came from
+      <code>claude_code.cost.usage</code> (§5) pins the price table and the dedup policy, the two
+      things most likely to drift silently. <code>Tests/ClaudeUsageCoreTests/</code> already has
+      the shape.</li>
+</ol>
+
+<h3>Privacy</h3>
+
+<p>Transcripts contain full prompt and tool text. This repo's stated posture is that nothing
+sensitive reaches disk or logs, and <code>SnapshotCache</code> already scrubs on write. The scanner
+must parse and discard — never cache message content — and every field in the calibration record
+above is a number, a model ID, or a timestamp by construction. Keep it that way.</p>
+
+<h3>Current best answer</h3>
+
+<div class="verdict">
+<p style="margin:0"><strong>The weekly cap is worth roughly $800–$850 of API-list-price usage</strong>
+— from the matched-span fit ($7.99/pp ÷ 0.94 coverage ≈ $8.50/pp × 100), with the current window
+only 48% through and therefore biased high; the fuller 2026-09-04 window puts it nearer
+$5.23 ÷ coverage. Call it <strong>$550–$850, not yet pinned</strong>. The honest statement is that
+one full-span window plus its coverage figure would collapse that range to about ±5%, and nothing
+in the data so far suggests the number has moved between the two comparable windows.</p>
+</div>
+
+<h2 id="repro">12. Reproducing this</h2>
+
+<p>The analysis scripts were scratch, not committed. Each finding is reproducible from the
+description above; the load-bearing invocations were:</p>
+
+<pre><code># Live usage snapshot (the token is read, used, and never printed)
+T=$(security find-generic-password -s "Claude Code-credentials" -w \
+    | python3 -c 'import sys,json;print(json.load(sys.stdin)["claudeAiOauth"]["accessToken"])')
+curl -s -H "Authorization: Bearer $T" -H "anthropic-beta: oauth-2025-04-20" \
+     https://api.anthropic.com/api/oauth/usage | python3 -m json.tool
+
+# Claude Code's own cost metric for one request (the §5 oracle)
+CLAUDE_CODE_ENABLE_TELEMETRY=1 OTEL_METRICS_EXPORTER=console \
+OTEL_METRIC_EXPORT_INTERVAL=3000 OTEL_LOGS_EXPORTER=none \
+  claude -p "reply with the single word: ok" --model haiku
+
+# Independent cost cross-check
+npx ccusage daily --since 20260918 --json
+
+# The historical utilization series (§8) - the widget's own log
+grep -h "Snapshot:" ~/Library/Application\ Support/claude-usage-menu-bar/claude-usage*.log
+# 2026-09-03T06:35:20Z INFO Snapshot: session=24.0% (elapsed 68.4% ·on-pace)  \
+#   weekly=44.0% (elapsed 78.3% ·on-pace)  fable=37.0% (elapsed 78.3% ·on-pace)</code></pre>
+
+<p>To rebuild §8: parse each <code>Snapshot:</code> line for its timestamp, <code>weekly=</code>
+percentage and weekly <code>elapsed</code> fraction; recover the window start as
+<code>timestamp − elapsed × 7d</code> (snap to the hour to absorb the 0.1% logging resolution, and
+merge starts within ~2h of each other); take the highest percentage observed per window; sum the
+transcript cost from that window's start to that observation's timestamp; divide.</p>
+
+<p>Two estimators were tried and one is wrong. The <strong>cumulative</strong> form above works
+because both quantities share an origin. A <strong>marginal</strong> form — regressing Δcost
+against Δpercent between consecutive polls — does not: with integer percentages and a 2-minute
+poll, a single point ticks over as soon as it rounds up, so the cost measured in that interval is
+an arbitrary fraction of the cost actually behind it. It produced estimates 3–10× too low and
+should not be revived.</p>
+
+<p>The cost computation itself is: group assistant rows by
+<code>(message.id, requestId)</code>, per-field max over
+<code>input_tokens</code>,
+<code>cache_creation.ephemeral_5m_input_tokens</code>,
+<code>cache_creation.ephemeral_1h_input_tokens</code>,
+<code>cache_read_input_tokens</code>,
+<code>output_tokens</code>,
+<code>server_tool_use.web_search_requests</code>; multiply by the §5 table; filter to the window
+by row <code>timestamp</code>.</p>
+
+<hr class="end">
+<footer>
+<p>All figures measured on one machine on 2026-09-21 against a single Claude plan. The usage
+endpoint is undocumented and its response shape can change without notice — the same caveat the
+README already carries for the rest of this project. Prices are public list prices as of
+2026-09-21 and will drift.</p>
+</footer>
+
+</div>
+</body>
+</html>
