@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CLU-4 Weekly Budget Spec</title>
+<style>
+  :root {
+    --bg: #fbfaf8;  --panel: #ffffff; --ink: #1c1b19; --muted: #61605c;
+    --rule: #e3e0da; --accent: #9a5b2c; --accent-soft: #f4ece4;
+    --ok: #2f6b45; --warn: #8a5a08; --bad: #9c2f2f;
+    --code-bg: #f4f2ee;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #171614; --panel: #1f1e1b; --ink: #ecebe7; --muted: #a09e98;
+      --rule: #333029; --accent: #d79a63; --accent-soft: #2a241d;
+      --ok: #7fbf96; --warn: #d9ab5a; --bad: #e08b8b;
+      --code-bg: #26241f;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #171614; --panel: #1f1e1b; --ink: #ecebe7; --muted: #a09e98;
+    --rule: #333029; --accent: #d79a63; --accent-soft: #2a241d;
+    --ok: #7fbf96; --warn: #d9ab5a; --bad: #e08b8b;
+    --code-bg: #26241f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.62 ui-serif, Georgia, "Iowan Old Style", serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  .wrap { max-width: 56rem; margin: 0 auto; padding: 3rem 16px 6rem; }
+  header.doc { border-bottom: 2px solid var(--ink); padding-bottom: 1.25rem; margin-bottom: 2.5rem; }
+  .kicker {
+    font: 600 12px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase;
+    color: var(--accent); margin: 0 0 .75rem;
+  }
+  h1 { font-size: clamp(1.7rem, 4.5vw, 2.5rem); line-height: 1.18; margin: 0 0 .6rem; letter-spacing: -.01em; }
+  .sub { color: var(--muted); margin: 0; font-size: 1.02rem; }
+  .meta { margin: 1.1rem 0 0; font: 13px/1.7 var(--mono); color: var(--muted); }
+  .meta b { color: var(--ink); font-weight: 600; }
+  h2 {
+    font-size: 1.32rem; margin: 3rem 0 .9rem; letter-spacing: -.005em;
+    padding-bottom: .4rem; border-bottom: 1px solid var(--rule);
+  }
+  h3 { font-size: 1.05rem; margin: 1.9rem 0 .55rem; }
+  p, li { font-size: 1rem; }
+  ul, ol { padding-left: 1.3rem; }
+  li { margin: .38rem 0; }
+  code { font: 13.5px/1.5 var(--mono); background: var(--code-bg); padding: .1em .35em; border-radius: 4px; overflow-wrap: anywhere; }
+  pre {
+    background: var(--code-bg); border: 1px solid var(--rule); border-radius: 8px;
+    padding: .9rem 1rem; overflow-x: auto; font: 13px/1.6 var(--mono);
+  }
+  pre code { background: none; padding: 0; font-size: inherit; overflow-wrap: normal; }
+  .verdict {
+    background: var(--panel); border: 1px solid var(--rule);
+    border-left: 4px solid var(--accent); border-radius: 8px;
+    padding: 1.1rem 1.25rem; margin: 1.5rem 0;
+  }
+  .verdict p:first-child { margin-top: 0; }
+  .verdict p:last-child { margin-bottom: 0; }
+  .callout {
+    border: 1px solid var(--rule); border-radius: 8px; padding: .85rem 1.1rem;
+    margin: 1.2rem 0; background: var(--panel);
+  }
+  .callout.warn { border-left: 4px solid var(--warn); }
+  .callout.ok { border-left: 4px solid var(--ok); }
+  .callout .lbl {
+    display: block; font: 600 11px/1 var(--mono); letter-spacing: .12em;
+    text-transform: uppercase; color: var(--muted); margin-bottom: .45rem;
+  }
+  .callout p:last-child { margin-bottom: 0; }
+  .tablewrap { overflow-x: auto; margin: 1.1rem 0; -webkit-overflow-scrolling: touch; }
+  table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+  th, td {
+    text-align: left; padding: .5rem .65rem; border-bottom: 1px solid var(--rule);
+    vertical-align: top;
+  }
+  th { font: 600 12px/1.4 var(--mono); letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+  td.num, th.num { text-align: right; font-family: var(--mono); font-size: .85rem; white-space: nowrap; }
+  tbody tr:last-child td { border-bottom: none; }
+  .toc { background: var(--panel); border: 1px solid var(--rule); border-radius: 8px; padding: 1rem 1.25rem; }
+  .toc ol { margin: .4rem 0 0; padding-left: 1.4rem; }
+  .toc li { margin: .2rem 0; font-size: .95rem; }
+  a { color: var(--accent); }
+  ul.checks { list-style: none; padding-left: 0; }
+  ul.checks li { padding-left: 1.7rem; position: relative; }
+  ul.checks li::before {
+    content: ""; position: absolute; left: 0; top: .32em; width: .95em; height: .95em;
+    border: 1.5px solid var(--muted); border-radius: 3px;
+  }
+  ul.checks li b.id { font: 600 12px/1 var(--mono); color: var(--accent); margin-right: .35rem; }
+  hr.end { border: none; border-top: 1px solid var(--rule); margin: 3.5rem 0 1.2rem; }
+  footer { color: var(--muted); font-size: .86rem; }
+
+  /* Popover mock. The real panel is always dark (NSAppearance .darkAqua), so these
+     colors are fixed rather than themed. */
+  .mocks { display: flex; flex-wrap: wrap; gap: 18px; margin: 1.4rem 0 .5rem; }
+  .mockcol { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .mockcap { font: 600 11px/1.3 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); text-align: center; max-width: 280px; }
+  .pop {
+    width: 280px; max-width: 100%; padding: 14px 16px 16px; border-radius: 12px;
+    background: rgb(40,40,44); color: #fff; box-shadow: 0 8px 24px rgba(0,0,0,.35);
+    font: 11.5px/1.35 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  }
+  .pop .row-head { display: flex; justify-content: space-between; align-items: baseline; }
+  .pop .lab { font-size: 11px; font-weight: 600; letter-spacing: .4px; color: rgba(255,255,255,.55); }
+  .pop .pct { font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .pop .pct small { font-size: 12px; font-weight: 500; color: rgba(255,255,255,.55); }
+  .pop .bar { position: relative; height: 6px; border-radius: 3px; background: rgba(255,255,255,.14); margin: 7px 0; }
+  .pop .fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; background: #fff; }
+  .pop .fill.hollow { background: transparent; border: 1.5px solid #fff; }
+  .pop .mark { position: absolute; top: -2px; width: 10px; height: 10px; margin-left: -5px; border-radius: 50%; border: 1.5px solid #fff; background: rgb(40,40,44); }
+  .pop .foot { color: rgba(255,255,255,.55); display: flex; gap: 6px; align-items: center; margin-top: 1px; }
+  .pop .foot .strong { color: #fff; font-weight: 500; }
+  .pop .trend { color: rgba(255,255,255,.55); display: flex; gap: 4px; align-items: center; margin-top: 5px; white-space: nowrap; }
+  .pop .trend.down { color: #fff; font-weight: 500; }
+  .pop svg { flex: none; }
+  .pop .new { outline: 1px dashed rgba(215,154,99,.9); outline-offset: 3px; border-radius: 2px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <p class="kicker">Spec · CLU-4</p>
+  <h1>Weekly usage budget, compared to last week</h1>
+  <p class="sub">Add one line under the Weekly bar that says whether the weekly limit covers about the
+  same amount of Claude Code usage as last week, or noticeably more or less. Show it only when the
+  data supports the claim.</p>
+  <p class="meta">
+    <b>Status</b> refinement · spec only, no app or source changes<br>
+    <b>Date</b> 2026-09-24 · <b>Builds on</b> <a href="../spikes/CLU-3-effective-usage-from-token-counts/findings.html">CLU-3 spike findings</a> (§8, §11)<br>
+    <b>Branch</b> spec/clu-4-weekly-budget-vs-last-week
+  </p>
+</header>
+
+<div class="toc">
+  <strong>Contents</strong>
+  <ol>
+    <li><a href="#summary">What ships</a></li>
+    <li><a href="#decisions">Decisions</a></li>
+    <li><a href="#copy">What the line says</a></li>
+    <li><a href="#estimator">How the comparison is computed</a></li>
+    <li><a href="#gates">Confidence gates</a></li>
+    <li><a href="#components">Components and file changes</a></li>
+    <li><a href="#constraints">Privacy and performance</a></li>
+    <li><a href="#tests">Tests</a></li>
+    <li><a href="#acceptance">Acceptance criteria</a></li>
+    <li><a href="#scope">Out of scope</a></li>
+    <li><a href="#risks">Risks and tunables</a></li>
+    <li><a href="#rollout">When the line first appears</a></li>
+  </ol>
+</div>
+
+<h2 id="summary">1. What ships</h2>
+
+<div class="verdict">
+<p><strong>A single footnote line under the Weekly row of the popover.</strong> It compares this
+week's <em>usage budget</em> with last week's. The usage budget is the dollar value, at public API list
+prices, of the Claude Code usage that one percentage point of the weekly limit covers. The comparison
+uses the same range of utilization in both weeks. It is one of three statements, or nothing:</p>
+<ul>
+  <li><code>Usage budget about the same as last week</code></li>
+  <li><code>Usage budget down 25% from last week</code></li>
+  <li><code>Usage budget up 20% from last week</code></li>
+</ul>
+<p style="margin-bottom:0">The line is hidden, with no placeholder and no gap, unless every gate in
+<a href="#gates">§5</a> passes. In short, the gates require that both weeks were recorded from near
+their start, both have passed <strong>50%</strong>, most usage in both was Claude Code on this Mac,
+both used a similar mix of models, and the difference is either clearly small or clearly large.</p>
+</div>
+
+<p>The work follows the tracking system that CLU-3 §11 designed. It adds a transcript scanner, a
+per-poll calibration log, and a tick-crossing estimator, and then shows the estimator's matched-span
+comparison in the panel. The feature does not show an absolute dollar figure for the limit (see
+<a href="#scope">§10</a>).</p>
+
+<div class="mocks" aria-label="Popover mock of the Weekly row">
+  <div class="mockcol">
+    <div class="pop">
+      <div class="row-head"><span class="lab">WEEKLY</span><span class="pct">81<small>%</small></span></div>
+      <div class="bar"><div class="fill" style="width:81%"></div><div class="mark" style="left:82.5%"></div></div>
+      <div class="foot">
+        <svg width="10" height="10" viewBox="0 0 10 10"><path d="M2 5.2 L4 7.2 L8 3" fill="none" stroke="rgba(255,255,255,.55)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>On pace</span><span style="color:rgba(255,255,255,.4)">·</span><span>Resets Fri at 3:00 PM</span>
+      </div>
+      <div class="trend new">
+        <svg width="10" height="10" viewBox="0 0 10 10"><path d="M2 3.8 H8 M2 6.2 H8" fill="none" stroke="rgba(255,255,255,.55)" stroke-width="1.3" stroke-linecap="round"/></svg>
+        <span>Usage budget about the same as last week</span>
+      </div>
+    </div>
+    <span class="mockcap">Same · |Δ| &lt; 10%</span>
+  </div>
+  <div class="mockcol">
+    <div class="pop">
+      <div class="row-head"><span class="lab">WEEKLY</span><span class="pct">78<small>%</small></span></div>
+      <div class="bar"><div class="fill hollow" style="width:78%"></div><div class="mark" style="left:57%"></div></div>
+      <div class="foot">
+        <svg width="10" height="10" viewBox="0 0 10 10"><path d="M2.5 7.5 L7.5 2.5 M4 2.5 H7.5 V6" fill="none" stroke="#fff" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span class="strong">Ahead of pace</span><span style="color:rgba(255,255,255,.4)">·</span><span>Resets Fri at 3:00 PM</span>
+      </div>
+      <div class="trend down new">
+        <svg width="10" height="10" viewBox="0 0 10 10"><path d="M5 2 V8 M2.5 5.5 L5 8 L7.5 5.5" fill="none" stroke="#fff" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>Usage budget down 25% from last week</span>
+      </div>
+    </div>
+    <span class="mockcap">Down · emphasized like “Ahead of pace”</span>
+  </div>
+  <div class="mockcol">
+    <div class="pop">
+      <div class="row-head"><span class="lab">WEEKLY</span><span class="pct">64<small>%</small></span></div>
+      <div class="bar"><div class="fill" style="width:64%"></div><div class="mark" style="left:70%"></div></div>
+      <div class="foot">
+        <svg width="10" height="10" viewBox="0 0 10 10"><path d="M2 5.2 L4 7.2 L8 3" fill="none" stroke="rgba(255,255,255,.55)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>On pace</span><span style="color:rgba(255,255,255,.4)">·</span><span>Resets Fri at 3:00 PM</span>
+      </div>
+      <div class="trend new">
+        <svg width="10" height="10" viewBox="0 0 10 10"><path d="M5 8 V2 M2.5 4.5 L5 2 L7.5 4.5" fill="none" stroke="rgba(255,255,255,.55)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>Usage budget up 20% from last week</span>
+      </div>
+    </div>
+    <span class="mockcap">Up</span>
+  </div>
+</div>
+<p style="font-size:.84rem;color:var(--muted)">Mock only. The dashed outline marks the new line and is
+not part of the design. Every other element is today's Weekly row, transcribed from
+<code>PopoverView.swift</code>. When any gate fails, the row looks exactly as it does today.</p>
+
+<h2 id="decisions">2. Decisions</h2>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Question</th><th>Decision</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td>When is the line allowed to appear?</td>
+        <td><strong>Matched span, both weeks ≥ 50%</strong> <em>(chosen by the ticket owner in refinement)</em></td>
+        <td>Measured over the same span, the spike's two comparable windows agreed to 0.4% at 47.5%
+            (§8). The stricter 70% gate is for an <em>absolute</em> estimate, which this feature does not show.</td></tr>
+    <tr><td>Backfill past weeks from <code>claude-usage.log</code>?</td>
+        <td><strong>No. Start recording fresh</strong> <em>(chosen by the ticket owner)</em></td>
+        <td>The log never recorded Claude Code's share of usage, so backfilled weeks would have to
+            assume 100%, which misreads quiet weeks like 2026-09-11. The log also rotates; it now reaches back only to 2026-09-12.</td></tr>
+    <tr><td>Where does a week start?</td>
+        <td><strong>At the weekly reset time from the OAuth usage endpoint:</strong> <code>seven_day.resets_at − 7 days</code> <em>(ticket owner, in refinement)</em></td>
+        <td>This is the same source the app already uses for the Weekly row's reset countdown and pace mark
+            (<code>UsageSnapshot.compute</code>), so the comparison's week always matches the week on screen.
+            <code>seven_day_breakdown.window_started_at</code> is used only as a cross-check (<a href="#engine">§6.6</a>).</td></tr>
+    <tr><td>What is “last week”?</td>
+        <td>The window that reset <em>into</em> the current one: its reset time equals the current start, within 1 hour.</td>
+        <td>If the weeks are not back to back (for example, a week with no usage at all), there is no honest “last week”, so nothing is shown.
+            The line never falls back to an older week.</td></tr>
+    <tr><td>Show direction both ways?</td>
+        <td>Yes: down, up, and same.</td>
+        <td>The ticket gives “down” as an example. An increase is equally meaningful and uses the same math.</td></tr>
+    <tr><td>How to express “significant confidence”?</td>
+        <td>A dead band: under 10% reads as <em>same</em>, 20% or more reads as <em>down/up</em>, and anything in between shows <em>nothing</em>.</td>
+        <td>The spike can detect a change of about ±15–20% and warns that the regression's own error bars are overconfident (§11).
+            A fixed dead band never claims more than the method can back up.</td></tr>
+    <tr><td>Wording of the “same” line</td>
+        <td><code>Usage budget about the same as last week</code> rather than the ticket's “About the same usage as last week”.</td>
+        <td>The ticket's phrase could be read as “you used about the same amount”, which is a different claim. Making all three lines start with
+            “Usage budget …” keeps them parallel and unambiguous.</td></tr>
+  </tbody>
+</table></div>
+
+<h2 id="copy">3. What the line says</h2>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Measured change Δ</th><th>Shown text</th><th>Glyph</th><th>Style</th></tr></thead>
+  <tbody>
+    <tr><td>|Δ| &lt; 10%</td><td><code>Usage budget about the same as last week</code></td><td>two short bars (equals)</td><td>white 55%, regular</td></tr>
+    <tr><td>Δ ≤ −20%</td><td><code>Usage budget down N% from last week</code></td><td>straight down arrow</td><td>white, medium (same emphasis as “Ahead of pace”)</td></tr>
+    <tr><td>Δ ≥ +20%</td><td><code>Usage budget up N% from last week</code></td><td>straight up arrow</td><td>white 55%, regular</td></tr>
+    <tr><td>10% ≤ |Δ| &lt; 20%</td><td colspan="3"><em>Nothing. The result is inconclusive.</em></td></tr>
+    <tr><td>Any gate fails</td><td colspan="3"><em>Nothing.</em></td></tr>
+  </tbody>
+</table></div>
+
+<ul>
+  <li><strong>N</strong> is |Δ| × 100 rounded to the nearest 5, so it is never below 20. A 23% drop reads “down 25%”.
+      Rounding to 5 avoids suggesting more precision than the method has.</li>
+  <li><strong>Δ</strong> is <code>k_this / k_last − 1</code>, where <code>k</code> is dollars per percentage point of the
+      weekly limit (<a href="#estimator">§4</a>). “Down” means one percentage point now covers less usage, so the limit is effectively smaller.</li>
+  <li>The arrows are <em>straight</em> (vertical), not the diagonal arrow the pace footnote uses, so “budget up” is never
+      confused with “ahead of pace”.</li>
+  <li>The line has a hover tooltip (<code>.help</code>) that states what it measures:
+      <code>Claude Code usage at API list prices per 1% of your weekly limit, this week vs. last week, over the first S% of each week.</code>
+      Here S is the upper end of the matched span, for example “first 64%”.</li>
+  <li>The line must fit on one line in the 280pt panel (248pt of content width). At 11.5pt SF the longest string is about 225pt with its glyph.
+      Confirm this with <code>--render-popover</code>.</li>
+</ul>
+
+<h2 id="estimator">4. How the comparison is computed</h2>
+
+<p>This is the CLU-3 §11 estimator with the matched-span comparison from §8. The only change is the
+tick interpolation described below, which handles gaps between polls.</p>
+
+<h3>4.1 Window identity</h3>
+<ul>
+  <li><code>windowStart = seven_day.resets_at − 7d</code>, rounded to the nearest minute. The endpoint's
+      <code>resets_at</code> jitters by fractions of a second between fields and polls (for example <code>18:59:59.720162</code> and
+      <code>18:59:59.719877</code> in the existing test fixtures). The rounded value is the window key.</li>
+  <li>When <code>seven_day.resets_at</code> is null, the window is empty or fresh: no record is written and no comparison is shown.</li>
+  <li>The previous window is the recorded window whose <code>windowStart + 7d</code> is within 1 hour of the current <code>windowStart</code>.</li>
+</ul>
+
+<h3>4.2 Cost of a record</h3>
+<p>Each calibration record (<a href="#log">§6.4</a>) stores <em>token counts</em> per model since the window started,
+not dollars. Dollars are computed when the comparison runs, applying <strong>one</strong> frozen <code>PriceTable</code> to both weeks.
+That meets CLU-3's requirement to “freeze the price table”: a public price change reprices both weeks
+equally and cannot look like a change in the allowance. When a new model is added to the table, past
+records are priced retroactively.</p>
+<pre><code>cost(record) = Σ over priced, standard-speed models m:
+                 input·p.in + cw5m·p.cw5m + cw1h·p.cw1h + cacheRead·p.read + output·p.out   (per MTok)
+               + webSearch · $0.01</code></pre>
+
+<h3>4.3 Ticks</h3>
+<p>The records of one window, sorted by <code>capturedAt</code>, are <code>r₀…rₙ</code>, with integer utilization
+<code>uᵢ = round(weeklyPct)</code> and cost <code>cᵢ</code>. Track the running maximum <code>M</code>. Whenever
+<code>uᵢ &gt; M</code>, each crossed half-point becomes one tick:</p>
+<pre><code>s = uᵢ − M                                  // points crossed between rᵢ₋₁ and rᵢ
+for j in 1...s:
+    x = M + j − 0.5                         // true utilization crossed this value
+    y = cᵢ₋₁ + (j − 0.5)/s · (cᵢ − cᵢ₋₁)    // cost interpolated across the gap
+    gap = s &gt; 2                             // flags ticks inferred across a long gap
+M = uᵢ</code></pre>
+<p>For the usual single-point step this puts <code>y</code> at the midpoint of the two polls. The spike used
+<code>cᵢ</code>; the two differ by half of one poll's spend, and the intercept absorbs that. Interpolation
+matters when the Mac slept or the app was quit while usage moved several points; without it those ticks
+would all share one <code>y</code> and flatten the slope. A decrease in utilization inside a window emits
+nothing, and <code>M</code> keeps its value.</p>
+
+<h3>4.4 Matched span, fit, coverage, ratio</h3>
+<pre><code>lo = max(firstPct_this, firstPct_last) + 0.5   // first crossing both weeks observed
+hi = min(maxPct_this,   maxPct_last)   − 0.5   // last crossing both weeks reached
+for each week w, using only ticks with lo ≤ x ≤ hi:
+    (a_w, b_w, R²_w) = ordinary least squares  y = a + b·x
+    cov_w  = surfaceShares["claude_code"] / 100 at the record that produced tick hi
+    k_w    = b_w / cov_w                       // $ per pp of the whole weekly limit
+Δ = k_this / k_last − 1</code></pre>
+<p>The intercept <code>a</code> absorbs the endpoint's accounting lag, which is large: CLU-3 measured intercepts from −$99 to +$1,140.
+<code>b</code> is the number to compare, and the standard error the fit reports is <strong>never</strong> shown or used as a confidence value (CLU-3 §11).</p>
+
+<h2 id="gates">5. Confidence gates</h2>
+
+<p>Every gate must pass for both weeks, or the line is hidden. The thresholds are named constants in
+one place (<code>CapEstimator.Config</code>) so they can be tuned once real weeks accumulate.</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>#</th><th>Gate</th><th class="num">Threshold</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td>G1</td><td>Previous window recorded and back to back (<a href="#estimator">§4.1</a>)</td><td class="num">±1 h</td><td>No honest “last week” otherwise.</td></tr>
+    <tr><td>G2</td><td>Both windows recorded from near their start: first recorded <code>weeklyPct</code></td><td class="num">≤ 10%</td><td>Keeps the span anchored near 0. The first week after install is usually partial, so it is skipped.</td></tr>
+    <tr><td>G3</td><td>Both windows reached the gate: max <code>weeklyPct</code></td><td class="num">≥ 50%</td><td>Refinement decision. Matched-span agreement was validated at 47.5% (CLU-3 §8).</td></tr>
+    <tr><td>G4</td><td>Ticks in the matched span, per week</td><td class="num">≥ 30</td><td>Enough independent crossings for a stable slope.</td></tr>
+    <tr><td>G5</td><td>Share of gap ticks (step &gt; 2 points), per week</td><td class="num">≤ 25%</td><td>Too much interpolation means the fit is mostly assumption.</td></tr>
+    <tr><td>G6</td><td>Claude Code share of usage (<code>seven_day_breakdown</code>) present, per week</td><td class="num">≥ 80%</td><td>Without it a silent cut looks the same as working elsewhere (CLU-3 §8, the 2026-09-11 week). A low share makes the coverage correction dominate the result.</td></tr>
+    <tr><td>G7</td><td>Requests from models missing from <code>PriceTable</code></td><td class="num">≤ 1%</td><td>Fails loudly on a new model rather than silently under-counting. The log names the model.</td></tr>
+    <tr><td>G8</td><td>Fast-mode spend (<code>usage.speed == "fast"</code>, priced at 2× as an estimate)</td><td class="num">≤ 5%</td><td>It is unknown how the plan counts fast mode, so its tokens are recorded but excluded from cost. None was seen locally since 2026-09-11.</td></tr>
+    <tr><td>G9</td><td>Model mix shift: total-variation distance of cost share by model ID at <code>hi</code></td><td class="num">≤ 0.20</td><td>Model mix is the dominant confounder (CLU-3 §8, §11). Opus 5 and Opus 5.5 count as <em>different</em> models.</td></tr>
+    <tr><td>G10</td><td>Fit sanity: <code>b &gt; 0</code> and <code>R²</code></td><td class="num">≥ 0.90</td><td>Catches a broken scanner or a transcript format change, not statistical confidence.</td></tr>
+    <tr><td>G11</td><td>Dead band on |Δ|</td><td class="num">&lt;10% or ≥20%</td><td>See <a href="#copy">§3</a>.</td></tr>
+  </tbody>
+</table></div>
+
+<p><code>CapEstimator</code> returns either a trend or the <em>first</em> failing gate as a typed reason
+(<code>.hidden(.belowGate(this: 38, last: 72))</code> and so on). The engine logs the result only when it
+changes, for example <code>Budget trend: down 25% (k $6.10/pp vs $8.13/pp over 0.5–54.5%, cov 94%/92%, ticks 54/54)</code>
+or <code>Budget trend: hidden — model mix shift 0.31</code>. That record is what the thresholds will be tuned from.</p>
+
+<h2 id="components">6. Components and file changes</h2>
+
+<h3>6.1 <code>UsagePoller.swift</code>: decode the breakdown</h3>
+<p>Add an optional <code>sevenDayBreakdown: SevenDayBreakdown?</code> to <code>UsageResponse</code>
+(key <code>seven_day_breakdown</code>) with <code>windowStartedAt: Date?</code> and
+<code>rows: [Row]</code>, where <code>Row</code> has <code>key</code>, <code>displayName</code>, and
+<code>percent: Double</code>. All fields are optional, and a missing object decodes to <code>nil</code>,
+so the existing test payloads, which have no breakdown, still decode. Add a
+<code>surfaceShares: [String: Double]</code> convenience keyed by <code>row.key</code>. The CLU-3 sample
+response is the fixture. No other fields are decoded (<a href="#scope">§10</a>).</p>
+
+<h3>6.2 <code>PriceTable.swift</code> (new, Core)</h3>
+<p>Frozen list rates per million tokens, in one version-stamped table (<code>PriceTable.version = "2026-09-24"</code>, logged with each trend):</p>
+<div class="tablewrap"><table>
+  <thead><tr><th>Model ID</th><th class="num">Input</th><th class="num">5m write</th><th class="num">1h write</th><th class="num">Cache read</th><th class="num">Output</th></tr></thead>
+  <tbody>
+    <tr><td><code>claude-opus-5-5</code></td><td class="num">$4.00</td><td class="num">$5.00</td><td class="num">$8.00</td><td class="num">$0.20</td><td class="num">$20.00</td></tr>
+    <tr><td><code>claude-opus-5</code></td><td class="num">$5.00</td><td class="num">$6.25</td><td class="num">$10.00</td><td class="num">$0.50</td><td class="num">$25.00</td></tr>
+    <tr><td><code>claude-fable-5-1</code></td><td class="num">$10.00</td><td class="num">$12.50</td><td class="num">$20.00</td><td class="num">$0.25</td><td class="num">$50.00</td></tr>
+    <tr><td><code>claude-fable-5</code></td><td class="num">$10.00</td><td class="num">$12.50</td><td class="num">$20.00</td><td class="num">$1.00</td><td class="num">$50.00</td></tr>
+    <tr><td><code>claude-sonnet-5</code></td><td class="num">$2.00</td><td class="num">$2.50</td><td class="num">$4.00</td><td class="num">$0.20</td><td class="num">$10.00</td></tr>
+    <tr><td><code>claude-haiku-4-5</code></td><td class="num">$1.00</td><td class="num">$1.25</td><td class="num">$2.00</td><td class="num">$0.10</td><td class="num">$5.00</td></tr>
+  </tbody>
+</table></div>
+<ul>
+  <li>Rates come from CLU-3 §5, plus <strong>Opus 5.5</strong>. Opus 5.5 is not in the spike's table, but it is already in use on this
+      machine (70 requests since 2026-09-11). Its input, cache-read, and output rates are Anthropic's published $4 / $0.20 / $20.
+      Its cache-write rates are <em>derived</em> from the standard 1.25× and 2× multipliers.
+      <strong>The implementer re-checks every row against the pricing page before merging.</strong></li>
+  <li><strong>ID normalization:</strong> strip a trailing <code>-YYYYMMDD</code> before lookup. Transcripts record Haiku as
+      <code>claude-haiku-4-5-20251001</code>, which the spike's table did not match.</li>
+  <li>An unknown ID returns <code>nil</code>, never a guess. <code>&lt;synthetic&gt;</code> rows are dropped by the scanner before pricing.</li>
+</ul>
+
+<h3>6.3 <code>TranscriptScanner.swift</code> (new, Core)</h3>
+<p>Produces <code>WindowUsage</code>: per model key, the totals of <code>input</code>, <code>cacheWrite5m</code>,
+<code>cacheWrite1h</code>, <code>cacheRead</code>, <code>output</code>, <code>webSearch</code>, and
+<code>requests</code> for all requests with <code>windowStart ≤ timestamp ≤ capturedAt</code>.</p>
+<ul>
+  <li><strong>Root:</strong> <code>$CLAUDE_CONFIG_DIR/projects</code> if set, otherwise <code>~/.claude/projects</code>. Enumerate
+      <code>*.jsonl</code> <em>recursively</em>, because subagent transcripts live at <code>&lt;session&gt;/subagents/agent-*.jsonl</code>.
+      Skip files whose mtime is earlier than <code>windowStart</code>.</li>
+  <li><strong>Rows:</strong> <code>type == "assistant"</code> with a <code>message.usage</code> block. Use a cheap substring
+      prefilter before JSON decoding, and cover it with a test so it never rejects a valid row. Decode with a minimal
+      <code>Decodable</code> that declares <em>only</em> <code>timestamp</code>, <code>requestId</code>,
+      <code>sessionId</code>, <code>message.id</code>, <code>message.model</code>, and the usage numbers
+      (<code>input_tokens</code>, <code>cache_creation_input_tokens</code>,
+      <code>cache_creation.ephemeral_5m_input_tokens</code>, <code>cache_creation.ephemeral_1h_input_tokens</code>,
+      <code>cache_read_input_tokens</code>, <code>output_tokens</code>, <code>server_tool_use.web_search_requests</code>,
+      <code>speed</code>). Content fields are never modeled.</li>
+  <li><strong>Dedup (CLU-3 §4):</strong> group by <code>message.id + requestId</code>, falling back to
+      <code>sessionId + message.id</code> when <code>requestId</code> is missing. Merge with the <em>per-field maximum</em>, never
+      first-wins. A group's timestamp is the earliest row timestamp. The same request copied into a forked or resumed session collapses to one.</li>
+  <li><strong>Cache-write split:</strong> use <code>cache_creation.ephemeral_{5m,1h}</code> when present. Otherwise treat the flat
+      <code>cache_creation_input_tokens</code> as 5m.</li>
+  <li><strong>Model key:</strong> the model ID as written. Rows with <code>speed == "fast"</code> go under
+      <code>"&lt;model&gt;/fast"</code>, so G8 can measure them and the cost function can exclude them.</li>
+  <li><strong>Incremental:</strong> keep per-file state (inode, byte offset). Read from the offset to the last complete newline and
+      keep any trailing partial line for the next scan. A shrunk or replaced file is re-read from 0; the dedup map makes that idempotent.
+      Keep the per-request map for the current window only, and reset it when the window key changes.</li>
+  <li><strong>Isolation:</strong> it runs off the main actor (an <code>actor</code>, or a serial queue behind a continuation).
+      A missing or unreadable root returns <code>nil</code> and logs one warning. It never throws into the poll path.</li>
+</ul>
+
+<h3 id="log">6.4 <code>CalibrationLog.swift</code> (new, Core)</h3>
+<p>This is the append-only history CLU-3 asked for, so the series does not depend on the rotating <code>claude-usage.log</code>.</p>
+<ul>
+  <li><strong>Layout:</strong> one JSON Lines file per window,
+      <code>~/Library/Application Support/claude-usage-menu-bar/calibration/&lt;windowStart&gt;.jsonl</code>, with the name formatted like
+      <code>2026-09-25T1900Z.jsonl</code> (no colons). Finding last week means opening one small file. Files are never rotated or pruned.</li>
+  <li><strong>Record (v1):</strong>
+<pre><code>{"v":1,
+ "capturedAt":"2026-10-03T17:34:17Z",
+ "windowStart":"2026-10-02T19:00:00Z",          // resets_at − 7d, minute-rounded
+ "weeklyPct":48,
+ "surfaceShares":{"claude_code":94,"cowork":6,"chat":0,"other":0},   // null if absent
+ "scopedPct":{"Fable":19},                       // from snapshot.weeklyModels; for later analysis
+ "usage":{"claude-opus-5-5":{"input":55652,"cacheWrite5m":0,"cacheWrite1h":60746483,
+                             "cacheRead":4189360597,"output":12055611,"webSearch":0,"requests":2074}}}</code></pre>
+      Every value is a number, a model ID, a surface key, or a timestamp. Nothing else is possible by construction. Decoding ignores unknown
+      keys and skips an undecodable line, such as a partial last line after a crash.</li>
+  <li><strong>Write policy:</strong> the estimator needs the poll <em>before</em> and the poll <em>at</em> each utilization step,
+      not every poll. Hold the newest unwritten record as <code>pending</code>. For each new record <code>R</code>:
+    <ol>
+      <li>If <code>R</code> starts a new window, flush <code>pending</code> to its own window file, then write <code>R</code>.</li>
+      <li>Otherwise, if <code>round(weeklyPct)</code> or <code>surfaceShares</code> changed since the previous observation, flush <code>pending</code>, then write <code>R</code>.</li>
+      <li>Otherwise, if 30 minutes or more have passed since the last write, write <code>R</code> as a heartbeat.</li>
+      <li>Otherwise <code>R</code> replaces <code>pending</code>.</li>
+    </ol>
+      That is about 2 records per point plus hourly heartbeats: roughly 250&nbsp;KB per heavy week, against about 2.5&nbsp;MB if every 2-minute poll were logged.
+      At launch, the last written record is read back from the current window's file.</li>
+  <li>A second writer, such as the dev <code>ClaudeUsageDaemon</code> running beside the app, just adds interleaved records.
+      Each line is written with a single append and records are sorted by <code>capturedAt</code> on read, so this is harmless.</li>
+</ul>
+
+<h3>6.5 <code>CapEstimator.swift</code> (new, Core, pure)</h3>
+<pre><code>public enum CapEstimator {
+    public struct Config { /* every §5 threshold, with the defaults above */ }
+    public static func evaluate(this: [CalibrationRecord], last: [CalibrationRecord],
+                                prices: PriceTable = .current, config: Config = .init()) -&gt; BudgetComparison
+}
+public enum BudgetComparison: Equatable { case trend(BudgetTrend), hidden(HiddenReason) }
+public struct BudgetTrend: Equatable {
+    public enum Direction: Equatable { case same, down, up }
+    public let direction: Direction
+    public let displayPct: Int      // rounded to 5; 0 for .same
+    public let spanUpperPct: Int    // S for the tooltip, e.g. 64
+    public let ratio: Double        // raw k_this / k_last, for logs
+}</code></pre>
+<p>It has no I/O, clock, or global state, so every gate is unit-testable with synthetic records.</p>
+
+<h3 id="engine">6.6 <code>EngineState.swift</code> and <code>UsageEngine.swift</code></h3>
+<ul>
+  <li><code>EngineState</code> gains <code>budgetTrend: BudgetTrend?</code>, with a default value on the initializer so existing call sites
+      (<code>PopoverSampleRenderer</code>, <code>.empty</code>) keep compiling.</li>
+  <li><strong>On launch:</strong> load the current window's file (the newest file whose <code>windowStart + 7d</code> is later than now) and the
+      file for the window before it, evaluate, and include the result in the first <code>publish</code>. The line paints from disk
+      immediately, like the cached snapshot. No transcript scan is needed for this.</li>
+  <li><strong>After each successful poll:</strong> <code>publish(.ok)</code> first, unchanged, so the usage display never waits on the scan. Then:
+    <ol>
+      <li>If <code>seven_day.resets_at</code> is present, compute <code>windowStart</code>. Cross-check it against
+          <code>seven_day_breakdown.window_started_at</code>. If they differ by more than 60&nbsp;s, log one warning per window
+          (this settles CLU-3 open question 5). <strong>The <code>resets_at</code>-derived start is always the one used.</strong></li>
+      <li><code>await scanner.usage(since: windowStart, upTo: snapshot.capturedAt)</code>.</li>
+      <li>Build the record and pass it to <code>CalibrationLog</code>.</li>
+      <li>Only if a record was written, since ticks change only on writes: re-evaluate, and if the result changed, log it and publish again with the same status.</li>
+    </ol></li>
+  <li>A failure in any of these steps (scan, log I/O, decode) is logged and leaves <code>budgetTrend</code> unchanged or <code>nil</code>. It never
+      changes <code>EngineStatus</code>, the back-off, or the snapshot.</li>
+  <li>When the window key changes, the scanner resets. The new week then has no ticks, so the line disappears until it passes 50%.</li>
+</ul>
+
+<h3>6.7 <code>PopoverView.swift</code> and <code>PopoverSampleRenderer.swift</code></h3>
+<ul>
+  <li><code>PopoverModel</code> gains <code>budgetLine: BudgetLine?</code> (<code>kind</code>, <code>text</code>, <code>help</code>), flattened from
+      <code>state.budgetTrend</code> in the same way the other fields are flattened.</li>
+  <li>Only the Weekly row changes. Its footer becomes a <code>VStack(alignment: .leading, spacing: 5)</code> of the existing
+      <code>PaceFootnote</code> and, when present, a new <code>BudgetTrendFootnote</code>: an 11.5pt <code>HStack(spacing: 4)</code> of
+      a <code>TrendGlyph</code> and the text, <code>lineLimit(1)</code>, styled as in <a href="#copy">§3</a>, with <code>.help(help)</code>.
+      Per-model rows such as Fable never show it.</li>
+  <li><code>TrendGlyph(kind:)</code> is a new 10×10 <code>Path</code> glyph matching the existing glyphs (1.3pt stroke, round caps):
+      two bars for same, and vertical arrows for down and up.</li>
+  <li><code>--render-popover</code>: give each <code>Sample</code> an optional trend. Add <em>down 25%</em> to “Weekly ahead” (78%),
+      <em>same</em> to “Near cap” (92%), and a new “Budget up” sample at 64% with <em>up 20%</em>. The samples below 50% keep no line,
+      which shows the hidden state.</li>
+</ul>
+
+<h3>6.8 <code>README.md</code></h3>
+<ul>
+  <li>In the description of what the panel shows, add a sentence about the budget line and when it appears.</li>
+  <li>In <strong>How it works</strong>, add <code>TranscriptScanner → CalibrationLog → CapEstimator</code> to the diagram.</li>
+  <li>In <strong>Privacy &amp; security</strong>, state that the app now reads Claude Code's local transcripts in <code>~/.claude/projects</code>,
+      extracts only token counts, model IDs, and timestamps, and never stores, logs, or sends prompt or response content. Also state that the
+      derived numbers live in <code>calibration/</code> under Application Support. This is a new data access and must be disclosed.</li>
+</ul>
+
+<h2 id="constraints">7. Privacy and performance</h2>
+<ul>
+  <li><strong>Transcripts are sensitive.</strong> They contain full prompts and tool output. The scanner's decode types have no content
+      fields, nothing from a transcript line is logged, and the calibration record has no free-text field. <code>Log.redact</code> still applies to all log lines.</li>
+  <li><strong>Nothing leaves the machine.</strong> No new network calls. The only request is the existing usage endpoint.</li>
+  <li><strong>Cost per poll:</strong> an incremental scan should finish in about <strong>100&nbsp;ms or less</strong> on this machine. A cold scan
+      of one window at launch or rollover should finish in <strong>2&nbsp;s or less</strong> (the spike's full six-week scan took 0.73&nbsp;s in Python).
+      Log the duration of cold scans and of any scan over 250&nbsp;ms. Neither may block the main actor.</li>
+  <li><strong>Memory:</strong> one dedup map for the current window, about 2–8k entries of fixed-size numbers.</li>
+</ul>
+
+<h2 id="tests">8. Tests</h2>
+<p>New files in <code>Tests/ClaudeUsageCoreTests/</code>, in the style of <code>WeeklyModelUsageTests</code>: inline JSON fixtures, with no dependence on the real <code>~/.claude</code>.</p>
+<div class="tablewrap"><table>
+  <thead><tr><th>Suite</th><th>Pins</th></tr></thead>
+  <tbody>
+    <tr><td><code>PriceTableTests</code></td><td>The CLU-3 §5 oracle: haiku, in 10 / out 60 / cacheRead 13,701 / cacheWrite1h 9,463 costs <strong>$0.0206061</strong> (to 1e-9).
+        Fable 5.1 cache read is $0.25. Dated IDs normalize. An unknown ID returns <code>nil</code>.</td></tr>
+    <tr><td><code>TranscriptScannerTests</code></td><td>Temp-dir fixtures covering: streaming rows with growing <code>output_tokens</code> (per-field max, not first-wins);
+        the same request in two files (counted once); a nested <code>subagents/</code> file (included); <code>&lt;synthetic&gt;</code> (dropped);
+        rows before the window start (excluded); a missing <code>requestId</code> (fallback key); lines appended between scans (only the new ones counted);
+        a partial trailing line (held until complete); a truncated file (re-read without double-counting); fast rows (separate key); the 5m/1h split and the fallback.</td></tr>
+    <tr><td><code>SevenDayBreakdownTests</code></td><td>The CLU-3 §2 payload decodes the shares and <code>window_started_at</code>. A payload without the breakdown still decodes, and the existing tests pass unchanged.</td></tr>
+    <tr><td><code>CalibrationLogTests</code></td><td>The write policy: a step writes pending plus current, a steady state writes an hourly heartbeat, a window change writes to a new file, and a shares change writes.
+        Round-trip. A corrupt line is skipped. The file name is formatted correctly.</td></tr>
+    <tr><td><code>CapEstimatorTests</code></td><td>Synthetic weeks covering: equal slopes (<em>same</em>); last $8/pp against this $6/pp (<em>down 25%</em>); <em>up 20%</em>; Δ = 15% (hidden, inconclusive);
+        a 23% drop (reads “down 25%”); each gate G1–G10 failing on its own with the matching reason; coverage correction (the same raw slope at 94% and 80% coverage shifts <code>k</code>);
+        a multi-point step (interpolated <code>y</code>, flagged as gap ticks); a utilization dip (no ticks emitted); a matched span that truncates to the shorter week.</td></tr>
+  </tbody>
+</table></div>
+<p>Visual QA: <code>.build/debug/ClaudeUsageApp --render-popover &lt;dir&gt;</code> shows the three line states and the hidden state, each on one line.</p>
+
+<h2 id="acceptance">9. Acceptance criteria</h2>
+<ul class="checks">
+  <li><b class="id">AC1</b>When every gate in §5 passes, the Weekly row shows exactly one line, below the pace and reset footnote, with the §3 copy, glyph, style, and tooltip.</li>
+  <li><b class="id">AC2</b>When any gate fails, the Weekly row renders exactly as it does today, with no placeholder, spacing change, or “not enough data” text.</li>
+  <li><b class="id">AC3</b>Per-model weekly rows (such as Fable) and the Session row never show the line.</li>
+  <li><b class="id">AC4</b>The week boundary is <code>seven_day.resets_at − 7d</code> from the OAuth usage endpoint, and “last week” is the window that reset into the current one.
+      A disagreement with <code>window_started_at</code> is logged and does not change the boundary.</li>
+  <li><b class="id">AC5</b>The comparison uses matched spans (§4.4), with dollars from one frozen price table applied to both weeks.</li>
+  <li><b class="id">AC6</b>After a relaunch, the line appears on first paint from the calibration files, without waiting for a poll.</li>
+  <li><b class="id">AC7</b>No transcript content is persisted or logged. Every calibration field is a number, model ID, surface key, or timestamp.</li>
+  <li><b class="id">AC8</b>A missing or unreadable <code>~/.claude/projects</code>, or a missing <code>seven_day_breakdown</code>, hides the line and logs once. Usage display, status, and polling are unaffected.</li>
+  <li><b class="id">AC9</b>Scanning never runs on the main actor, and it meets the §7 timing on this machine (checked from the log).</li>
+  <li><b class="id">AC10</b>Changes in the trend or hidden reason are logged once each, with k, span, coverage, and tick counts.</li>
+  <li><b class="id">AC11</b><code>swift build</code> and <code>swift test</code> pass, including the §8 suites.</li>
+  <li><b class="id">AC12</b>The README describes the line and discloses transcript access (§6.8).</li>
+</ul>
+
+<h2 id="scope">10. Out of scope</h2>
+<ul>
+  <li><strong>An absolute dollar value for the limit</strong> (“this week's cap ≈ $850”). That estimate is biased below about 70% (CLU-3 §11) and was not asked for.</li>
+  <li><strong>Backfill</strong> from <code>claude-usage.log</code> (decision in §2).</li>
+  <li><strong>Session-window estimates.</strong> The 5-hour window is too small and lags too much to divide by (CLU-3 §8).</li>
+  <li><strong>Decoding <code>extra_usage</code>, <code>limit_dollars</code>, and <code>used_dollars</code>.</strong> A matched span stops at or below 99.5%, so spend beyond the limit
+      never enters a tick, and the “exclude maxed-out windows” rule applies only to absolute estimates. Candidate follow-up.</li>
+  <li><strong>Per-model weighting fits</strong>, testing how cache reads are weighted, and OpenTelemetry ingestion. The calibration log keeps the data these would need.</li>
+  <li><strong>A setting to hide the line</strong>, and any icon change.</li>
+</ul>
+
+<h2 id="risks">11. Risks and tunables</h2>
+<div class="callout warn">
+  <span class="lbl">Watch these</span>
+  <ul style="margin:0">
+    <li><strong>Thresholds rest on one validated pair.</strong> The matched-span method agreed to 0.4% once. The G3–G11 defaults are provisional. Revisit them
+        after about four recorded weeks using the logged <code>Budget trend</code> lines.</li>
+    <li><strong>Switching models silences the line.</strong> G9 treats Opus 5 and Opus 5.5 as different models, and Opus 5.5 usage is already starting on this machine.
+        A week that changes default model will likely show nothing for about two weeks. This is by design: a model-weighting change cannot be told apart from a budget change.</li>
+    <li><strong>Opus 5.5 cache-write rates are derived</strong> and fast-mode plan accounting is unknown. Both are covered by the implementer re-check (§6.2) and by G8.</li>
+    <li><strong>Undocumented surfaces.</strong> The breakdown can disappear (G6 hides the line) and the transcript format can drift (the scanner tests and G10 catch it).</li>
+    <li><strong>Invisible usage</strong> on another Mac or the web is corrected for only through the Claude Code share. Below 80% the line hides rather than guess.</li>
+  </ul>
+</div>
+
+<h2 id="rollout">12. When the line first appears</h2>
+<p>Recording starts on first launch of the build that includes this feature. That first window is usually already past 10%, so G2 excludes it. The
+first window that <em>starts</em> with the new build running becomes “last week” for the one after it. The line can first appear partway
+through the second fully recorded week, once that week passes 50%, and only if the first week also reached 50%. If the build ships before
+the 2026-09-25 reset, that is the week starting 2026-10-02 at the earliest. Until then the panel looks exactly as it does today.</p>
+
+<hr class="end">
+<footer>
+  CLU-4 refinement · spec only. Implementation lands in a follow-up PR. Figures and rates are as of 2026-09-24, and the usage endpoint is
+  undocumented, the same caveat the README carries for the rest of this project.
+</footer>
+
+</div>
+</body>
+</html>
