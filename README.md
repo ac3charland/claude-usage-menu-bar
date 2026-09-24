@@ -29,7 +29,12 @@ menu bars automatically.
 | **Whole icon dimmed** | Data is stale, offline, or unavailable (see the panel for why) |
 
 Click the icon for a panel with exact percentages, the live "resets in…" countdown, and
-an on-pace / ahead-of-pace readout for the week.
+an on-pace / ahead-of-pace readout for the week. Under the Weekly bar, once two back-to-back
+weeks have been recorded and the reading has settled, a line compares this week's **usage
+budget** with last week's: the API-list-price value of the Claude Code usage each 1% of the
+weekly limit covered, read over the same span of both weeks ("Usage budget similar to last
+week", "…down 25% from last week", "…up ~15%…"). Hover it for what it measures and any
+caveats. Until the data supports a reading, nothing is shown.
 
 ## Requirements
 
@@ -96,6 +101,10 @@ KeychainReader → OAuth token  (Claude Code-credentials)
    → UsagePoller   (GET https://api.anthropic.com/api/oauth/usage)
    → UsageSnapshot (session/weekly utilization, reset times, pace)
    → menu bar icon + SwiftUI popover
+
+PricingFetcher (daily GET of Anthropic's public pricing page) → PriceHistory (dated list prices)
+TranscriptScanner (token counts from ~/.claude/projects) → CalibrationLog (one file per week)
+   → CapEstimator (this week's $ per 1% vs last week's, over a matched span) → "Usage budget …" line
 ```
 
 Polling backs off exponentially on errors (and harder on rate limits), forces an
@@ -110,6 +119,15 @@ the icon paints instantly on the next launch.
   scrubbed of bearer tokens and `sk-ant-…` keys, and only non-secret usage numbers are
   cached.
 - No telemetry, no analytics, no third-party servers.
+- **Local transcripts are read.** To compare the weekly usage budget with last week, the app
+  reads Claude Code's local transcripts in `~/.claude/projects` (or `$CLAUDE_CONFIG_DIR/projects`)
+  and extracts only token counts, model IDs, and timestamps. Prompt and response content is
+  never stored, logged, or sent anywhere. The derived numbers (utilization, surface shares, and
+  per-model token totals) live in `calibration/` under
+  `~/Library/Application Support/claude-usage-menu-bar/`.
+- **One public page is downloaded daily.** The app fetches Anthropic's public pricing page
+  (`platform.claude.com`) once a day to price tokens at the list prices in effect at the time.
+  The request carries no credentials and no data.
 - The app is **not sandboxed** — it needs to read Claude Code's Keychain item and spawn
   the `claude` CLI, both of which the App Sandbox forbids. (That's also why this isn't an
   App Store app.)

@@ -33,11 +33,15 @@ public struct EngineState {
     public let snapshot: UsageSnapshot?
     public let status: EngineStatus
     public let lastSuccess: Date?
+    /// The weekly usage-budget comparison with last week (CLU-4). `nil` when a hiding gate
+    /// fails, in which case the Weekly row renders exactly as it did before the feature.
+    public let budgetTrend: BudgetTrend?
 
-    public init(snapshot: UsageSnapshot?, status: EngineStatus, lastSuccess: Date?) {
+    public init(snapshot: UsageSnapshot?, status: EngineStatus, lastSuccess: Date?, budgetTrend: BudgetTrend? = nil) {
         self.snapshot = snapshot
         self.status = status
         self.lastSuccess = lastSuccess
+        self.budgetTrend = budgetTrend
     }
 
     public static let empty = EngineState(snapshot: nil, status: .stale, lastSuccess: nil)
