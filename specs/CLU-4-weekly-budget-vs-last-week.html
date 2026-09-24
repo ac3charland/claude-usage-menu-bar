@@ -47,6 +47,7 @@
     padding-bottom: .4rem; border-bottom: 1px solid var(--rule);
   }
   h3 { font-size: 1.05rem; margin: 1.9rem 0 .55rem; }
+  h4 { font-size: .95rem; margin: 1.4rem 0 .4rem; color: var(--muted); }
   p, li { font-size: 1rem; }
   ul, ol { padding-left: 1.3rem; }
   li { margin: .38rem 0; }
@@ -129,9 +130,9 @@
 <header class="doc">
   <p class="kicker">Spec · CLU-4</p>
   <h1>Weekly usage budget, compared to last week</h1>
-  <p class="sub">Add one line under the Weekly bar that says whether the weekly limit covers about the
-  same amount of Claude Code usage as last week, or noticeably more or less. Show it only when the
-  data supports the claim.</p>
+  <p class="sub">Add one line under the Weekly bar that says whether the weekly limit is worth about the
+  same in API dollars as last week, or noticeably more or less. In other words: is the subsidy changing?
+  Show it only when the data supports the claim.</p>
   <p class="meta">
     <b>Status</b> refinement · spec only, no app or source changes<br>
     <b>Date</b> 2026-09-24 · <b>Builds on</b> <a href="../spikes/CLU-3-effective-usage-from-token-counts/findings.html">CLU-3 spike findings</a> (§8, §11)<br>
@@ -161,9 +162,10 @@
 
 <div class="verdict">
 <p><strong>A single footnote line under the Weekly row of the popover.</strong> It compares this
-week's <em>usage budget</em> with last week's. The usage budget is the dollar value, at public API list
-prices, of the Claude Code usage that one percentage point of the weekly limit covers. The comparison
-uses the same range of utilization in both weeks. It is one of three statements, or nothing:</p>
+week's <em>usage budget</em> with last week's. The usage budget is the subsidy: the dollar value, at
+public API list prices <strong>in effect when the usage happened</strong>, of the Claude Code usage that one
+percentage point of the weekly limit covers. The comparison uses the same range of utilization in both
+weeks. It is one of three statements, or nothing:</p>
 <ul>
   <li><code>Usage budget about the same as last week</code></li>
   <li><code>Usage budget down 25% from last week</code></li>
@@ -177,8 +179,10 @@ both used a similar mix of models, and the difference is either clearly small or
 
 <p>The work follows the tracking system that CLU-3 §11 designed. It adds a transcript scanner, a
 per-poll calibration log, and a tick-crossing estimator, and then shows the estimator's matched-span
-comparison in the panel. The feature does not show an absolute dollar figure for the limit (see
-<a href="#scope">§10</a>).</p>
+comparison in the panel. It also adds something the spike did not have: a <strong>dated price
+history</strong> fetched from Anthropic's pricing page, so each request is priced at the rate in effect
+when it was made (<a href="#pricing">§6.2</a>). The feature does not show an absolute dollar figure for
+the limit (see <a href="#scope">§10</a>).</p>
 
 <div class="mocks" aria-label="Popover mock of the Weekly row">
   <div class="mockcol">
@@ -236,6 +240,16 @@ not part of the design. Every other element is today's Weekly row, transcribed f
 <div class="tablewrap"><table>
   <thead><tr><th>Question</th><th>Decision</th><th>Why</th></tr></thead>
   <tbody>
+    <tr><td>What does the budget measure?</td>
+        <td><strong>The subsidy: API dollars at the prices in effect when the usage happened,</strong> per percentage point of the weekly limit <em>(ticket owner, in refinement)</em></td>
+        <td>The question is “how much subsidized usage am I getting, and is that changing?” Tokens are not a stable unit of work, because newer models do more
+            per token, so a fixed-price “amount of work” measure answers a different question. <strong>This deliberately overrides CLU-3's advice to freeze the price table.</strong>
+            Example: Opus's list price drops 20% and the plan still allows the same tokens. The limit is now worth 20% fewer dollars, and the line should say
+            “down 20%”. A frozen table would say “same” and hide it.</td></tr>
+    <tr><td>Where do prices come from?</td>
+        <td><strong>Anthropic's pricing page, fetched as markdown once a day,</strong> kept as a dated history, with a built-in table as the fallback <em>(ticket owner, in refinement)</em></td>
+        <td>A new model or a price change is picked up without a code change. The page is published by Anthropic, the only company the app already talks to.
+            LiteLLM's JSON was considered: it is easier to parse, but it would add a download from GitHub, a third party. The Models API has no price fields.</td></tr>
     <tr><td>When is the line allowed to appear?</td>
         <td><strong>Matched span, both weeks ≥ 50%</strong> <em>(chosen by the ticket owner in refinement)</em></td>
         <td>Measured over the same span, the spike's two comparable windows agreed to 0.4% at 47.5%
@@ -284,20 +298,25 @@ not part of the design. Every other element is today's Weekly row, transcribed f
   <li><strong>N</strong> is |Δ| × 100 rounded to the nearest 5, so it is never below 20. A 23% drop reads “down 25%”.
       Rounding to 5 avoids suggesting more precision than the method has.</li>
   <li><strong>Δ</strong> is <code>k_this / k_last − 1</code>, where <code>k</code> is dollars per percentage point of the
-      weekly limit (<a href="#estimator">§4</a>). “Down” means one percentage point now covers less usage, so the limit is effectively smaller.</li>
+      weekly limit, at the prices of the time (<a href="#estimator">§4</a>). “Down” means one percentage point now covers fewer API dollars, so the subsidy shrank.</li>
   <li>The arrows are <em>straight</em> (vertical), not the diagonal arrow the pace footnote uses, so “budget up” is never
       confused with “ahead of pace”.</li>
   <li>The line has a hover tooltip (<code>.help</code>) that states what it measures:
-      <code>Claude Code usage at API list prices per 1% of your weekly limit, this week vs. last week, over the first S% of each week.</code>
+      <code>API-price value of the Claude Code usage each 1% of your weekly limit covered, at the prices of the time, this week vs. last week, over the first S% of each week.</code>
       Here S is the upper end of the matched span, for example “first 64%”.</li>
+  <li><strong>Price attribution.</strong> When list prices of a model used in either week changed between the start of last week and now, the tooltip adds a
+      second sentence with the constant-price result (<a href="#estimator">§4.4</a>). For example: <code>API prices changed since last week. At constant prices this would read “about the same”.</code>
+      That separates a subsidy change caused by a price move from one caused by the plan. The constant-price result uses the same dead band, and reads
+      “inconclusive” when it falls inside it.</li>
   <li>The line must fit on one line in the 280pt panel (248pt of content width). At 11.5pt SF the longest string is about 225pt with its glyph.
       Confirm this with <code>--render-popover</code>.</li>
 </ul>
 
 <h2 id="estimator">4. How the comparison is computed</h2>
 
-<p>This is the CLU-3 §11 estimator with the matched-span comparison from §8. The only change is the
-tick interpolation described below, which handles gaps between polls.</p>
+<p>This is the CLU-3 §11 estimator with the matched-span comparison from §8. It has two changes: dollars
+come from prices in effect at the time rather than a frozen table (§4.2), and ticks are interpolated
+across gaps between polls (§4.3).</p>
 
 <h3>4.1 Window identity</h3>
 <ul>
@@ -308,15 +327,19 @@ tick interpolation described below, which handles gaps between polls.</p>
   <li>The previous window is the recorded window whose <code>windowStart + 7d</code> is within 1 hour of the current <code>windowStart</code>.</li>
 </ul>
 
-<h3>4.2 Cost of a record</h3>
-<p>Each calibration record (<a href="#log">§6.4</a>) stores <em>token counts</em> per model since the window started,
-not dollars. Dollars are computed when the comparison runs, applying <strong>one</strong> frozen <code>PriceTable</code> to both weeks.
-That meets CLU-3's requirement to “freeze the price table”: a public price change reprices both weeks
-equally and cannot look like a change in the allowance. When a new model is added to the table, past
-records are priced retroactively.</p>
-<pre><code>cost(record) = Σ over priced, standard-speed models m:
-                 input·p.in + cw5m·p.cw5m + cw1h·p.cw1h + cacheRead·p.read + output·p.out   (per MTok)
-               + webSearch · $0.01</code></pre>
+<h3>4.2 Cost at the prices of the time</h3>
+<p>Each request is priced by the <code>PriceHistory</code> entry in effect at the request's own timestamp
+(<a href="#pricing">§6.2</a>). A price change in the middle of a week therefore splits that week correctly: requests
+before it use the old rate, and requests after it use the new one. The scanner sums these into a cumulative
+<em>time-of-use</em> cost per model, and each calibration record (<a href="#log">§6.4</a>) stores that cost
+<strong>alongside the token counts</strong>.</p>
+<pre><code>cost(request) = input·p.in + cw5m·p.cw5m + cw1h·p.cw1h + cacheRead·p.read + output·p.out   (per MTok)
+              + webSearch · $0.01
+    where p = PriceHistory.rates(model, at: request.timestamp)
+cost(record)  = Σ cost(request) over priced, standard-speed requests since windowStart</code></pre>
+<p>The token counts are kept so the same record can also be priced at <strong>constant</strong> prices, using
+the latest table for both weeks. That figure is only used for the price attribution in the tooltip
+(<a href="#copy">§3</a>). It is never the headline number.</p>
 
 <h3>4.3 Ticks</h3>
 <p>The records of one window, sorted by <code>capturedAt</code>, are <code>r₀…rₙ</code>, with integer utilization
@@ -341,13 +364,18 @@ for each week w, using only ticks with lo ≤ x ≤ hi:
     (a_w, b_w, R²_w) = ordinary least squares  y = a + b·x
     cov_w  = surfaceShares["claude_code"] / 100 at the record that produced tick hi
     k_w    = b_w / cov_w                       // $ per pp of the whole weekly limit
-Δ = k_this / k_last − 1</code></pre>
+Δ = k_this / k_last − 1                        // headline: time-of-use prices
+
+// attribution only: rerun the same fit with y priced at constant (latest) prices
+Δ_const = k′_this / k′_last − 1
+show attribution if a price used in either week changed since last week's start
+                 and the dead-band reading of Δ_const differs from that of Δ</code></pre>
 <p>The intercept <code>a</code> absorbs the endpoint's accounting lag, which is large: CLU-3 measured intercepts from −$99 to +$1,140.
 <code>b</code> is the number to compare, and the standard error the fit reports is <strong>never</strong> shown or used as a confidence value (CLU-3 §11).</p>
 
 <h2 id="gates">5. Confidence gates</h2>
 
-<p>Every gate must pass for both weeks, or the line is hidden. The thresholds are named constants in
+<p>Every gate must pass, for both weeks where it applies, or the line is hidden. The thresholds are named constants in
 one place (<code>CapEstimator.Config</code>) so they can be tuned once real weeks accumulate.</p>
 
 <div class="tablewrap"><table>
@@ -359,17 +387,18 @@ one place (<code>CapEstimator.Config</code>) so they can be tuned once real week
     <tr><td>G4</td><td>Ticks in the matched span, per week</td><td class="num">≥ 30</td><td>Enough independent crossings for a stable slope.</td></tr>
     <tr><td>G5</td><td>Share of gap ticks (step &gt; 2 points), per week</td><td class="num">≤ 25%</td><td>Too much interpolation means the fit is mostly assumption.</td></tr>
     <tr><td>G6</td><td>Claude Code share of usage (<code>seven_day_breakdown</code>) present, per week</td><td class="num">≥ 80%</td><td>Without it a silent cut looks the same as working elsewhere (CLU-3 §8, the 2026-09-11 week). A low share makes the coverage correction dominate the result.</td></tr>
-    <tr><td>G7</td><td>Requests from models missing from <code>PriceTable</code></td><td class="num">≤ 1%</td><td>Fails loudly on a new model rather than silently under-counting. The log names the model.</td></tr>
+    <tr><td>G7</td><td>Unpriced requests (model missing from the price history), in <em>every</em> record in the span</td><td class="num">≤ 1%</td><td>Fails loudly on a new model rather than silently under-counting. Checking every record, not just the last, catches a week where a new model was priced only after the daily fetch picked it up, which leaves a step in cumulative cost. The log names the model.</td></tr>
     <tr><td>G8</td><td>Fast-mode spend (<code>usage.speed == "fast"</code>, priced at 2× as an estimate)</td><td class="num">≤ 5%</td><td>It is unknown how the plan counts fast mode, so its tokens are recorded but excluded from cost. None was seen locally since 2026-09-11.</td></tr>
     <tr><td>G9</td><td>Model mix shift: total-variation distance of cost share by model ID at <code>hi</code></td><td class="num">≤ 0.20</td><td>Model mix is the dominant confounder (CLU-3 §8, §11). Opus 5 and Opus 5.5 count as <em>different</em> models.</td></tr>
     <tr><td>G10</td><td>Fit sanity: <code>b &gt; 0</code> and <code>R²</code></td><td class="num">≥ 0.90</td><td>Catches a broken scanner or a transcript format change, not statistical confidence.</td></tr>
     <tr><td>G11</td><td>Dead band on |Δ|</td><td class="num">&lt;10% or ≥20%</td><td>See <a href="#copy">§3</a>.</td></tr>
+    <tr><td>G12</td><td>Prices are current: last successful pricing-page fetch</td><td class="num">≤ 7 days ago</td><td>Prices are now part of the answer. If the fetch has been failing, for example because the page format changed, a price change could be missed and the subsidy misstated.</td></tr>
   </tbody>
 </table></div>
 
 <p><code>CapEstimator</code> returns either a trend or the <em>first</em> failing gate as a typed reason
 (<code>.hidden(.belowGate(this: 38, last: 72))</code> and so on). The engine logs the result only when it
-changes, for example <code>Budget trend: down 25% (k $6.10/pp vs $8.13/pp over 0.5–54.5%, cov 94%/92%, ticks 54/54)</code>
+changes, for example <code>Budget trend: down 20% (k $6.40/pp vs $8.00/pp over 0.5–54.5%, cov 94%/92%, ticks 54/54, prices 2026-10-05; constant prices: same)</code>
 or <code>Budget trend: hidden — model mix shift 0.31</code>. That record is what the thresholds will be tuned from.</p>
 
 <h2 id="components">6. Components and file changes</h2>
@@ -383,8 +412,57 @@ so the existing test payloads, which have no breakdown, still decode. Add a
 <code>surfaceShares: [String: Double]</code> convenience keyed by <code>row.key</code>. The CLU-3 sample
 response is the fixture. No other fields are decoded (<a href="#scope">§10</a>).</p>
 
-<h3>6.2 <code>PriceTable.swift</code> (new, Core)</h3>
-<p>Frozen list rates per million tokens, in one version-stamped table (<code>PriceTable.version = "2026-09-24"</code>, logged with each trend):</p>
+<h3 id="pricing">6.2 <code>PriceHistory.swift</code> and <code>PricingFetcher.swift</code> (new, Core)</h3>
+<p>This is a dated history of list-price tables. It answers “what did model <em>m</em> cost at time <em>t</em>?”
+It is kept current by fetching Anthropic's pricing page, and it falls back to a built-in table.</p>
+
+<h4>Source</h4>
+<ul>
+  <li><code>GET https://platform.claude.com/docs/en/about-claude/pricing.md</code>. Anthropic serves its docs pages as markdown at a
+      <code>.md</code> URL, about 47&nbsp;KB. The request is a plain GET <strong>with no Authorization header</strong>, so the OAuth token never goes to the
+      docs site. The timeout is 10&nbsp;s.</li>
+  <li>The engine tries at most once every 24 hours, as an extra step after a successful usage poll, never on its own timer. After a failure it retries
+      on the next poll that is at least 1 hour later.</li>
+  <li>Considered and rejected: LiteLLM's <code>model_prices_and_context_window.json</code>, the source ccusage uses. It is keyed by exact model ID and matched
+      Anthropic's numbers for all six models on 2026-09-24. But it is a 2.9&nbsp;MB download from GitHub, which would break the README's “no third-party
+      servers” promise. The Models API (<code>/v1/models</code>) has no price fields and needs an API key the app does not have.</li>
+</ul>
+
+<h4>Parsing</h4>
+<ul>
+  <li>Locate the model table by its exact header row:
+      <code>Model | Base input tokens | 5m cache writes | 1h cache writes | Cache hits and refreshes | Output tokens</code>.
+      Parse rows until the table ends.</li>
+  <li>In each model cell, strip markdown links, parentheticals such as <code>(retired, …)</code> and <code>(limited availability)</code>, and
+      <code>&lt;sup&gt;…&lt;/sup&gt;</code> footnote markers. Then derive the ID from the name: lowercase it and turn spaces and dots into hyphens,
+      so “Claude Opus 5.5” becomes <code>claude-opus-5-5</code>.
+      Each price cell must match <code>$&lt;decimal&gt; / MTok</code> once footnote markers are removed.</li>
+  <li><strong>Validation. The fetch is rejected as a whole if any check fails:</strong>
+      the header matches; at least 5 rows parse; no more than half of the models already in the history are missing, since a larger loss
+      points to a parse problem; and each row has cache read &lt; input &lt; 5m write &lt; 1h write and input &lt; output.
+      On rejection, keep the last good table and log the reason once per day.</li>
+  <li>A model that disappears from the page, for example after retirement, keeps its last known rates. Models are never dropped from the history.</li>
+  <li>Prose footnotes, such as the note that Sonnet 5's scheduled 2026-09-01 increase was cancelled, are not parsed. A change counts once it
+      appears in the table.</li>
+</ul>
+
+<h4>History and lookup</h4>
+<ul>
+  <li>Stored in <code>~/Library/Application Support/claude-usage-menu-bar/pricing/</code>:
+      <code>history.jsonl</code> gets one line per <em>distinct</em> table,
+      <code>{"effectiveFrom", "fetchedAt", "source", "rates": {id: {in, cw5m, cw1h, read, out}}}</code>, appended only when the rates differ from the
+      latest entry. <code>state.json</code> holds <code>lastAttemptAt</code> and <code>lastSuccessAt</code>, which gate G12.</li>
+  <li><code>effectiveFrom</code> is the fetch time at which a change was first seen. That is up to 24 hours after the real change, plus however long
+      the page takes to update. The built-in table below is the implicit first entry, with <code>effectiveFrom</code> in the distant past.</li>
+  <li><code>rates(model, at: t)</code>: normalize the ID by stripping a trailing <code>-YYYYMMDD</code>. Transcripts record Haiku as
+      <code>claude-haiku-4-5-20251001</code>, which the spike's table did not match. Then return the model's rates from the entry in effect at
+      <code>t</code>. If the model is missing from that entry, use the <em>earliest later</em> entry that has it, so a new model's launch price
+      applies back to its first use. If no entry has it, return <code>nil</code>, never a guess.</li>
+  <li><code>priceChanged(models, since: t)</code> reports whether any of those models' rates differ between the entry in effect at <code>t</code> and the latest entry.
+      It drives the tooltip attribution in §3.</li>
+</ul>
+
+<h4>Built-in fallback table (checked against the live page on 2026-09-24)</h4>
 <div class="tablewrap"><table>
   <thead><tr><th>Model ID</th><th class="num">Input</th><th class="num">5m write</th><th class="num">1h write</th><th class="num">Cache read</th><th class="num">Output</th></tr></thead>
   <tbody>
@@ -396,20 +474,16 @@ response is the fixture. No other fields are decoded (<a href="#scope">§10</a>)
     <tr><td><code>claude-haiku-4-5</code></td><td class="num">$1.00</td><td class="num">$1.25</td><td class="num">$2.00</td><td class="num">$0.10</td><td class="num">$5.00</td></tr>
   </tbody>
 </table></div>
-<ul>
-  <li>Rates come from CLU-3 §5, plus <strong>Opus 5.5</strong>. Opus 5.5 is not in the spike's table, but it is already in use on this
-      machine (70 requests since 2026-09-11). Its input, cache-read, and output rates are Anthropic's published $4 / $0.20 / $20.
-      Its cache-write rates are <em>derived</em> from the standard 1.25× and 2× multipliers.
-      <strong>The implementer re-checks every row against the pricing page before merging.</strong></li>
-  <li><strong>ID normalization:</strong> strip a trailing <code>-YYYYMMDD</code> before lookup. Transcripts record Haiku as
-      <code>claude-haiku-4-5-20251001</code>, which the spike's table did not match.</li>
-  <li>An unknown ID returns <code>nil</code>, never a guess. <code>&lt;synthetic&gt;</code> rows are dropped by the scanner before pricing.</li>
-</ul>
+<p>Per million tokens. Web search is $10 per 1,000 searches for every model; it is not in the page's model table, so it stays a constant.
+Opus 5.5 reads cache at 0.05× and Fable 5.1 at 0.025× input, both taken from the page's footnotes and already reflected in its table.
+<code>&lt;synthetic&gt;</code> rows are dropped by the scanner before pricing.</p>
 
 <h3>6.3 <code>TranscriptScanner.swift</code> (new, Core)</h3>
-<p>Produces <code>WindowUsage</code>: per model key, the totals of <code>input</code>, <code>cacheWrite5m</code>,
-<code>cacheWrite1h</code>, <code>cacheRead</code>, <code>output</code>, <code>webSearch</code>, and
-<code>requests</code> for all requests with <code>windowStart ≤ timestamp ≤ capturedAt</code>.</p>
+<p>Produces <code>WindowUsage</code> for all requests with <code>windowStart ≤ timestamp ≤ capturedAt</code>. For each model key it holds
+the totals of <code>input</code>, <code>cacheWrite5m</code>, <code>cacheWrite1h</code>, <code>cacheRead</code>, <code>output</code>,
+<code>webSearch</code>, and <code>requests</code>. It also holds <code>cost</code>, where each request is priced by
+<code>PriceHistory.rates(model, at: request.timestamp)</code> (§4.2), and <code>unpriced</code>, the number of requests that got no rate.
+Each poll recomputes cost from the request map with the current history, so a newly fetched entry reaches the next record.</p>
 <ul>
   <li><strong>Root:</strong> <code>$CLAUDE_CONFIG_DIR/projects</code> if set, otherwise <code>~/.claude/projects</code>. Enumerate
       <code>*.jsonl</code> <em>recursively</em>, because subagent transcripts live at <code>&lt;session&gt;/subagents/agent-*.jsonl</code>.
@@ -450,7 +524,9 @@ response is the fixture. No other fields are decoded (<a href="#scope">§10</a>)
  "surfaceShares":{"claude_code":94,"cowork":6,"chat":0,"other":0},   // null if absent
  "scopedPct":{"Fable":19},                       // from snapshot.weeklyModels; for later analysis
  "usage":{"claude-opus-5-5":{"input":55652,"cacheWrite5m":0,"cacheWrite1h":60746483,
-                             "cacheRead":4189360597,"output":12055611,"webSearch":0,"requests":2074}}}</code></pre>
+                             "cacheRead":4189360597,"output":12055611,"webSearch":0,"requests":2074,
+                             "cost":1398.52,        // USD at the prices of the time (§4.2)
+                             "unpriced":0}}}</code></pre>
       Every value is a number, a model ID, a surface key, or a timestamp. Nothing else is possible by construction. Decoding ignores unknown
       keys and skips an undecodable line, such as a partial last line after a crash.</li>
   <li><strong>Write policy:</strong> the estimator needs the poll <em>before</em> and the poll <em>at</em> each utilization step,
@@ -471,17 +547,21 @@ response is the fixture. No other fields are decoded (<a href="#scope">§10</a>)
 <pre><code>public enum CapEstimator {
     public struct Config { /* every §5 threshold, with the defaults above */ }
     public static func evaluate(this: [CalibrationRecord], last: [CalibrationRecord],
-                                prices: PriceTable = .current, config: Config = .init()) -&gt; BudgetComparison
+                                prices: PriceHistory, config: Config = .init()) -&gt; BudgetComparison
 }
 public enum BudgetComparison: Equatable { case trend(BudgetTrend), hidden(HiddenReason) }
 public struct BudgetTrend: Equatable {
     public enum Direction: Equatable { case same, down, up }
+    public enum Reading: Equatable { case same, down(Int), up(Int), inconclusive }
     public let direction: Direction
     public let displayPct: Int      // rounded to 5; 0 for .same
     public let spanUpperPct: Int    // S for the tooltip, e.g. 64
     public let ratio: Double        // raw k_this / k_last, for logs
+    public let constantPrice: Reading?   // set only when prices changed and the reading differs (§3)
 }</code></pre>
-<p>It has no I/O, clock, or global state, so every gate is unit-testable with synthetic records.</p>
+<p>The headline uses each record's stored <code>cost</code>, priced at the time. <code>prices</code> is used only for the
+constant-price attribution, which reprices both weeks' token counts with the latest entry, and for <code>priceChanged</code>.
+The estimator has no I/O, clock, or global state; the price history is passed in. Every gate is unit-testable with synthetic records.</p>
 
 <h3 id="engine">6.6 <code>EngineState.swift</code> and <code>UsageEngine.swift</code></h3>
 <ul>
@@ -495,11 +575,12 @@ public struct BudgetTrend: Equatable {
       <li>If <code>seven_day.resets_at</code> is present, compute <code>windowStart</code>. Cross-check it against
           <code>seven_day_breakdown.window_started_at</code>. If they differ by more than 60&nbsp;s, log one warning per window
           (this settles CLU-3 open question 5). <strong>The <code>resets_at</code>-derived start is always the one used.</strong></li>
-      <li><code>await scanner.usage(since: windowStart, upTo: snapshot.capturedAt)</code>.</li>
+      <li>If the last pricing attempt was 24 hours or more ago (or 1 hour or more after a failure), run <code>PricingFetcher</code> and update <code>PriceHistory</code> (§6.2).</li>
+      <li><code>await scanner.usage(since: windowStart, upTo: snapshot.capturedAt, prices: history)</code>.</li>
       <li>Build the record and pass it to <code>CalibrationLog</code>.</li>
       <li>Only if a record was written, since ticks change only on writes: re-evaluate, and if the result changed, log it and publish again with the same status.</li>
     </ol></li>
-  <li>A failure in any of these steps (scan, log I/O, decode) is logged and leaves <code>budgetTrend</code> unchanged or <code>nil</code>. It never
+  <li>A failure in any of these steps (pricing fetch, scan, log I/O, decode) is logged and leaves <code>budgetTrend</code> unchanged or <code>nil</code>. It never
       changes <code>EngineStatus</code>, the back-off, or the snapshot.</li>
   <li>When the window key changes, the scanner resets. The new week then has no ticks, so the line disappears until it passes 50%.</li>
 </ul>
@@ -522,17 +603,20 @@ public struct BudgetTrend: Equatable {
 <h3>6.8 <code>README.md</code></h3>
 <ul>
   <li>In the description of what the panel shows, add a sentence about the budget line and when it appears.</li>
-  <li>In <strong>How it works</strong>, add <code>TranscriptScanner → CalibrationLog → CapEstimator</code> to the diagram.</li>
+  <li>In <strong>How it works</strong>, add <code>PricingFetcher → PriceHistory</code> and <code>TranscriptScanner → CalibrationLog → CapEstimator</code> to the diagram.</li>
   <li>In <strong>Privacy &amp; security</strong>, state that the app now reads Claude Code's local transcripts in <code>~/.claude/projects</code>,
       extracts only token counts, model IDs, and timestamps, and never stores, logs, or sends prompt or response content. Also state that the
       derived numbers live in <code>calibration/</code> under Application Support. This is a new data access and must be disclosed.</li>
+  <li>Also in <strong>Privacy &amp; security</strong>, state that once a day the app downloads Anthropic's public pricing page
+      (<code>platform.claude.com</code>). The request sends no credentials and no data. The “no third-party servers” line stays true.</li>
 </ul>
 
 <h2 id="constraints">7. Privacy and performance</h2>
 <ul>
   <li><strong>Transcripts are sensitive.</strong> They contain full prompts and tool output. The scanner's decode types have no content
       fields, nothing from a transcript line is logged, and the calibration record has no free-text field. <code>Log.redact</code> still applies to all log lines.</li>
-  <li><strong>Nothing leaves the machine.</strong> No new network calls. The only request is the existing usage endpoint.</li>
+  <li><strong>Nothing about the user leaves the machine.</strong> There is one new outbound request: a daily GET of Anthropic's public pricing page,
+      with no Authorization header, no cookies, and no query parameters. The usage endpoint is still the only request that carries the token.</li>
   <li><strong>Cost per poll:</strong> an incremental scan should finish in about <strong>100&nbsp;ms or less</strong> on this machine. A cold scan
       of one window at launch or rollover should finish in <strong>2&nbsp;s or less</strong> (the spike's full six-week scan took 0.73&nbsp;s in Python).
       Log the duration of cold scans and of any scan over 250&nbsp;ms. Neither may block the main actor.</li>
@@ -544,18 +628,26 @@ public struct BudgetTrend: Equatable {
 <div class="tablewrap"><table>
   <thead><tr><th>Suite</th><th>Pins</th></tr></thead>
   <tbody>
-    <tr><td><code>PriceTableTests</code></td><td>The CLU-3 §5 oracle: haiku, in 10 / out 60 / cacheRead 13,701 / cacheWrite1h 9,463 costs <strong>$0.0206061</strong> (to 1e-9).
-        Fable 5.1 cache read is $0.25. Dated IDs normalize. An unknown ID returns <code>nil</code>.</td></tr>
+    <tr><td><code>PriceHistoryTests</code></td><td>The CLU-3 §5 oracle: haiku, in 10 / out 60 / cacheRead 13,701 / cacheWrite1h 9,463 costs <strong>$0.0206061</strong> (to 1e-9).
+        Fable 5.1 cache read is $0.25. Dated IDs normalize. Lookup returns the entry in effect at <code>t</code>. A model missing from that entry uses the earliest later entry.
+        An unknown ID returns <code>nil</code>. An identical fetch appends nothing. A model missing from a fetch keeps its last rates. <code>priceChanged</code> is correct.</td></tr>
+    <tr><td><code>PricingPageParserTests</code></td><td>Fixture: the model table from the live <code>pricing.md</code> of 2026-09-24, including footnote markers, links, and the “retired” and
+        “limited availability” parentheticals. It parses to the §6.2 rates, with names mapped to IDs (<code>claude-mythos-5-1</code>, <code>claude-opus-5-5</code>, …).
+        Each of these rejects the whole fetch: a changed header, fewer than 5 rows, a malformed price, an ordering violation, and more than half the known models missing.</td></tr>
     <tr><td><code>TranscriptScannerTests</code></td><td>Temp-dir fixtures covering: streaming rows with growing <code>output_tokens</code> (per-field max, not first-wins);
         the same request in two files (counted once); a nested <code>subagents/</code> file (included); <code>&lt;synthetic&gt;</code> (dropped);
         rows before the window start (excluded); a missing <code>requestId</code> (fallback key); lines appended between scans (only the new ones counted);
-        a partial trailing line (held until complete); a truncated file (re-read without double-counting); fast rows (separate key); the 5m/1h split and the fallback.</td></tr>
+        a partial trailing line (held until complete); a truncated file (re-read without double-counting); fast rows (separate key); the 5m/1h split and the fallback;
+        requests on either side of a price change priced at their own time's rates; a model priced only in a later history entry (counted as unpriced until then, if absent from all).</td></tr>
     <tr><td><code>SevenDayBreakdownTests</code></td><td>The CLU-3 §2 payload decodes the shares and <code>window_started_at</code>. A payload without the breakdown still decodes, and the existing tests pass unchanged.</td></tr>
     <tr><td><code>CalibrationLogTests</code></td><td>The write policy: a step writes pending plus current, a steady state writes an hourly heartbeat, a window change writes to a new file, and a shares change writes.
         Round-trip. A corrupt line is skipped. The file name is formatted correctly.</td></tr>
     <tr><td><code>CapEstimatorTests</code></td><td>Synthetic weeks covering: equal slopes (<em>same</em>); last $8/pp against this $6/pp (<em>down 25%</em>); <em>up 20%</em>; Δ = 15% (hidden, inconclusive);
         a 23% drop (reads “down 25%”); each gate G1–G10 failing on its own with the matching reason; coverage correction (the same raw slope at 94% and 80% coverage shifts <code>k</code>);
-        a multi-point step (interpolated <code>y</code>, flagged as gap ticks); a utilization dip (no ticks emitted); a matched span that truncates to the shorter week.</td></tr>
+        a multi-point step (interpolated <code>y</code>, flagged as gap ticks); a utilization dip (no ticks emitted); a matched span that truncates to the shorter week.
+        <strong>The owner's counterexample:</strong> Opus list price drops 20% between the weeks while tokens per point stay the same. The result must read <em>down 20%</em>,
+        with attribution “at constant prices … about the same”. <strong>The inverse:</strong> the plan passes the cut through as 25% more tokens per point. The result reads
+        <em>same</em>, with attribution “at constant prices … up 25%”. Also: no price change (no attribution), and G12 stale prices (hidden).</td></tr>
   </tbody>
 </table></div>
 <p>Visual QA: <code>.build/debug/ClaudeUsageApp --render-popover &lt;dir&gt;</code> shows the three line states and the hidden state, each on one line.</p>
@@ -567,24 +659,32 @@ public struct BudgetTrend: Equatable {
   <li><b class="id">AC3</b>Per-model weekly rows (such as Fable) and the Session row never show the line.</li>
   <li><b class="id">AC4</b>The week boundary is <code>seven_day.resets_at − 7d</code> from the OAuth usage endpoint, and “last week” is the window that reset into the current one.
       A disagreement with <code>window_started_at</code> is logged and does not change the boundary.</li>
-  <li><b class="id">AC5</b>The comparison uses matched spans (§4.4), with dollars from one frozen price table applied to both weeks.</li>
+  <li><b class="id">AC5</b>The comparison uses matched spans (§4.4), with each request priced at the list price in effect when it was made (§4.2).
+      When prices changed between the weeks and the constant-price reading differs, the tooltip says so (§3).</li>
   <li><b class="id">AC6</b>After a relaunch, the line appears on first paint from the calibration files, without waiting for a poll.</li>
   <li><b class="id">AC7</b>No transcript content is persisted or logged. Every calibration field is a number, model ID, surface key, or timestamp.</li>
   <li><b class="id">AC8</b>A missing or unreadable <code>~/.claude/projects</code>, or a missing <code>seven_day_breakdown</code>, hides the line and logs once. Usage display, status, and polling are unaffected.</li>
   <li><b class="id">AC9</b>Scanning never runs on the main actor, and it meets the §7 timing on this machine (checked from the log).</li>
-  <li><b class="id">AC10</b>Changes in the trend or hidden reason are logged once each, with k, span, coverage, and tick counts.</li>
+  <li><b class="id">AC10</b>Changes in the trend or hidden reason are logged once each, with k, span, coverage, tick counts, the price entry used, and the constant-price reading.</li>
   <li><b class="id">AC11</b><code>swift build</code> and <code>swift test</code> pass, including the §8 suites.</li>
-  <li><b class="id">AC12</b>The README describes the line and discloses transcript access (§6.8).</li>
+  <li><b class="id">AC12</b>The README describes the line and discloses both the transcript access and the daily pricing-page fetch (§6.8).</li>
+  <li><b class="id">AC13</b>Prices update without a code change. Within 24 hours of a successful poll, a new model or price on Anthropic's pricing page becomes a new
+      dated entry in <code>pricing/history.jsonl</code>. A page that fails validation changes nothing, is logged, and after 7 days hides the line (G12).
+      The pricing request never carries the OAuth token.</li>
 </ul>
 
 <h2 id="scope">10. Out of scope</h2>
 <ul>
-  <li><strong>An absolute dollar value for the limit</strong> (“this week's cap ≈ $850”). That estimate is biased below about 70% (CLU-3 §11) and was not asked for.</li>
+  <li><strong>An absolute dollar value for the limit</strong> (“this week's limit is worth ≈ $850 of API usage”). This is the first half of the owner's question,
+      “how much subsidized usage am I getting?”. The estimate is biased below about 70% utilization (CLU-3 §11), so it needs its own, stricter gate.
+      It is a natural follow-up ticket, and nothing here blocks it: the calibration records already hold everything it needs.</li>
   <li><strong>Backfill</strong> from <code>claude-usage.log</code> (decision in §2).</li>
   <li><strong>Session-window estimates.</strong> The 5-hour window is too small and lags too much to divide by (CLU-3 §8).</li>
   <li><strong>Decoding <code>extra_usage</code>, <code>limit_dollars</code>, and <code>used_dollars</code>.</strong> A matched span stops at or below 99.5%, so spend beyond the limit
       never enters a tick, and the “exclude maxed-out windows” rule applies only to absolute estimates. Candidate follow-up.</li>
   <li><strong>Per-model weighting fits</strong>, testing how cache reads are weighted, and OpenTelemetry ingestion. The calibration log keeps the data these would need.</li>
+  <li><strong>Price modifiers</strong> from other sections of the pricing page (batch, long context, data residency). Claude Code's plan traffic is standard
+      interactive traffic, which matched the §5 oracle exactly.</li>
   <li><strong>A setting to hide the line</strong>, and any icon change.</li>
 </ul>
 
@@ -592,11 +692,15 @@ public struct BudgetTrend: Equatable {
 <div class="callout warn">
   <span class="lbl">Watch these</span>
   <ul style="margin:0">
-    <li><strong>Thresholds rest on one validated pair.</strong> The matched-span method agreed to 0.4% once. The G3–G11 defaults are provisional. Revisit them
+    <li><strong>Thresholds rest on one validated pair.</strong> The matched-span method agreed to 0.4% once. The G3–G12 defaults are provisional. Revisit them
         after about four recorded weeks using the logged <code>Budget trend</code> lines.</li>
     <li><strong>Switching models silences the line.</strong> G9 treats Opus 5 and Opus 5.5 as different models, and Opus 5.5 usage is already starting on this machine.
         A week that changes default model will likely show nothing for about two weeks. This is by design: a model-weighting change cannot be told apart from a budget change.</li>
-    <li><strong>Opus 5.5 cache-write rates are derived</strong> and fast-mode plan accounting is unknown. Both are covered by the implementer re-check (§6.2) and by G8.</li>
+    <li><strong>Price changes register late.</strong> A change takes effect in the history when the daily fetch first sees it, up to about 24 hours after the
+        real change. For one model that makes up all of one week's spend, a missed day of a 20% change skews that week by about 3%, well inside the 10–20% dead band.</li>
+    <li><strong>The pricing page is a docs page, not an API.</strong> A layout change breaks the parser. The whole fetch is rejected, the last good table is kept,
+        the log says why, and G12 hides the line after 7 days, so a silently wrong subsidy is never shown.</li>
+    <li><strong>Fast-mode plan accounting is unknown.</strong> G8 covers it.</li>
     <li><strong>Undocumented surfaces.</strong> The breakdown can disappear (G6 hides the line) and the transcript format can drift (the scanner tests and G10 catch it).</li>
     <li><strong>Invisible usage</strong> on another Mac or the web is corrected for only through the Claude Code share. Below 80% the line hides rather than guess.</li>
   </ul>
