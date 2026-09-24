@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CLU-4 Weekly Budget Spec</title>
+<style>
+  :root {
+    --bg: #fbfaf8;  --panel: #ffffff; --ink: #1c1b19; --muted: #61605c;
+    --rule: #e3e0da; --accent: #9a5b2c; --accent-soft: #f4ece4;
+    --ok: #2f6b45; --warn: #8a5a08; --bad: #9c2f2f;
+    --code-bg: #f4f2ee;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #171614; --panel: #1f1e1b; --ink: #ecebe7; --muted: #a09e98;
+      --rule: #333029; --accent: #d79a63; --accent-soft: #2a241d;
+      --ok: #7fbf96; --warn: #d9ab5a; --bad: #e08b8b;
+      --code-bg: #26241f;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #171614; --panel: #1f1e1b; --ink: #ecebe7; --muted: #a09e98;
+    --rule: #333029; --accent: #d79a63; --accent-soft: #2a241d;
+    --ok: #7fbf96; --warn: #d9ab5a; --bad: #e08b8b;
+    --code-bg: #26241f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.62 ui-serif, Georgia, "Iowan Old Style", serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  .wrap { max-width: 56rem; margin: 0 auto; padding: 3rem 16px 6rem; }
+  header.doc { border-bottom: 2px solid var(--ink); padding-bottom: 1.25rem; margin-bottom: 2.5rem; }
+  .kicker {
+    font: 600 12px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase;
+    color: var(--accent); margin: 0 0 .75rem;
+  }
+  h1 { font-size: clamp(1.7rem, 4.5vw, 2.5rem); line-height: 1.18; margin: 0 0 .6rem; letter-spacing: -.01em; }
+  .sub { color: var(--muted); margin: 0; font-size: 1.02rem; }
+  .meta { margin: 1.1rem 0 0; font: 13px/1.7 var(--mono); color: var(--muted); }
+  .meta b { color: var(--ink); font-weight: 600; }
+  h2 {
+    font-size: 1.32rem; margin: 3rem 0 .9rem; letter-spacing: -.005em;
+    padding-bottom: .4rem; border-bottom: 1px solid var(--rule);
+  }
+  h3 { font-size: 1.05rem; margin: 1.9rem 0 .55rem; }
+  h4 { font-size: .95rem; margin: 1.4rem 0 .4rem; color: var(--muted); }
+  p, li { font-size: 1rem; }
+  ul, ol { padding-left: 1.3rem; }
+  li { margin: .38rem 0; }
+  code { font: 13.5px/1.5 var(--mono); background: var(--code-bg); padding: .1em .35em; border-radius: 4px; overflow-wrap: anywhere; }
+  pre {
+    background: var(--code-bg); border: 1px solid var(--rule); border-radius: 8px;
+    padding: .9rem 1rem; overflow-x: auto; font: 13px/1.6 var(--mono);
+  }
+  pre code { background: none; padding: 0; font-size: inherit; overflow-wrap: normal; }
+  .verdict {
+    background: var(--panel); border: 1px solid var(--rule);
+    border-left: 4px solid var(--accent); border-radius: 8px;
+    padding: 1.1rem 1.25rem; margin: 1.5rem 0;
+  }
+  .verdict p:first-child { margin-top: 0; }
+  .verdict p:last-child { margin-bottom: 0; }
+  .callout {
+    border: 1px solid var(--rule); border-radius: 8px; padding: .85rem 1.1rem;
+    margin: 1.2rem 0; background: var(--panel);
+  }
+  .callout.warn { border-left: 4px solid var(--warn); }
+  .callout.ok { border-left: 4px solid var(--ok); }
+  .callout .lbl {
+    display: block; font: 600 11px/1 var(--mono); letter-spacing: .12em;
+    text-transform: uppercase; color: var(--muted); margin-bottom: .45rem;
+  }
+  .callout p:last-child { margin-bottom: 0; }
+  .tablewrap { overflow-x: auto; margin: 1.1rem 0; -webkit-overflow-scrolling: touch; }
+  table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+  th, td {
+    text-align: left; padding: .5rem .65rem; border-bottom: 1px solid var(--rule);
+    vertical-align: top;
+  }
+  th { font: 600 12px/1.4 var(--mono); letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+  td.num, th.num { text-align: right; font-family: var(--mono); font-size: .85rem; white-space: nowrap; }
+  tbody tr:last-child td { border-bottom: none; }
+  .toc { background: var(--panel); border: 1px solid var(--rule); border-radius: 8px; padding: 1rem 1.25rem; }
+  .toc ol { margin: .4rem 0 0; padding-left: 1.4rem; }
+  .toc li { margin: .2rem 0; font-size: .95rem; }
+  a { color: var(--accent); }
+  ul.checks { list-style: none; padding-left: 0; }
+  ul.checks li { padding-left: 1.7rem; position: relative; }
+  ul.checks li::before {
+    content: ""; position: absolute; left: 0; top: .32em; width: .95em; height: .95em;
+    border: 1.5px solid var(--muted); border-radius: 3px;
+  }
+  ul.checks li b.id { font: 600 12px/1 var(--mono); color: var(--accent); margin-right: .35rem; }
+  hr.end { border: none; border-top: 1px solid var(--rule); margin: 3.5rem 0 1.2rem; }
+  footer { color: var(--muted); font-size: .86rem; }
+
+  /* Popover mock. The real panel is always dark (NSAppearance .darkAqua), so these
+     colors are fixed rather than themed. */
+  .mocks { display: flex; flex-wrap: wrap; gap: 18px; margin: 1.4rem 0 .5rem; }
+  .mockcol { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .mockcap { font: 600 11px/1.3 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); text-align: center; max-width: 280px; }
+  .pop {
+    width: 280px; max-width: 100%; padding: 14px 16px 16px; border-radius: 12px;
+    background: rgb(40,40,44); color: #fff; box-shadow: 0 8px 24px rgba(0,0,0,.35);
+    font: 11.5px/1.35 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  }
+  .pop .row-head { display: flex; justify-content: space-between; align-items: baseline; }
+  .pop .lab { font-size: 11px; font-weight: 600; letter-spacing: .4px; color: rgba(255,255,255,.55); }
+  .pop .pct { font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .pop .pct small { font-size: 12px; font-weight: 500; color: rgba(255,255,255,.55); }
+  .pop .bar { position: relative; height: 6px; border-radius: 3px; background: rgba(255,255,255,.14); margin: 7px 0; }
+  .pop .fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; background: #fff; }
+  .pop .fill.hollow { background: transparent; border: 1.5px solid #fff; }
+  .pop .mark { position: absolute; top: -2px; width: 10px; height: 10px; margin-left: -5px; border-radius: 50%; border: 1.5px solid #fff; background: rgb(40,40,44); }
+  .pop .foot { color: rgba(255,255,255,.55); display: flex; gap: 6px; align-items: center; margin-top: 1px; }
+  .pop .foot .strong { color: #fff; font-weight: 500; }
+  .pop .trend { color: rgba(255,255,255,.55); display: flex; gap: 4px; align-items: center; margin-top: 5px; white-space: nowrap; }
+  .pop .trend.down { color: #fff; font-weight: 500; }
+  .pop svg { flex: none; }
+  .pop .new { outline: 1px dashed rgba(215,154,99,.9); outline-offset: 3px; border-radius: 2px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <p class="kicker">Spec · CLU-4</p>
+  <h1>Weekly usage budget, compared to last week</h1>
+  <p class="sub">Add one line under the Weekly bar that says whether the weekly limit is worth about the
+  same in API dollars as last week, or noticeably more or less. In other words: is the subsidy changing?
+  Show it only when the data supports the claim.</p>
+  <p class="meta">
+    <b>Status</b> refinement · spec only, no app or source changes<br>
+    <b>Date</b> 2026-09-24 · <b>Builds on</b> <a href="../spikes/CLU-3-effective-usage-from-token-counts/findings.html">CLU-3 spike findings</a> (§8, §11)<br>
+    <b>Branch</b> spec/clu-4-weekly-budget-vs-last-week
+  </p>
+</header>
+
+<div class="toc">
+  <strong>Contents</strong>
+  <ol>
+    <li><a href="#summary">What ships</a></li>
+    <li><a href="#decisions">Decisions</a></li>
+    <li><a href="#copy">What the line says</a></li>
+    <li><a href="#estimator">How the comparison is computed</a></li>
+    <li><a href="#gates">Confidence gates</a></li>
+    <li><a href="#components">Components and file changes</a></li>
+    <li><a href="#constraints">Privacy and performance</a></li>
+    <li><a href="#tests">Tests</a></li>
+    <li><a href="#acceptance">Acceptance criteria</a></li>
+    <li><a href="#scope">Out of scope</a></li>
+    <li><a href="#risks">Risks and tunables</a></li>
+    <li><a href="#rollout">When the line first appears</a></li>
+    <li><a href="#review">Adversarial review</a></li>
+  </ol>
+</div>
+
+<h2 id="summary">1. What ships</h2>
+
+<div class="verdict">
+<p><strong>A single footnote line under the Weekly row of the popover.</strong> It compares this
+week's <em>usage budget</em> with last week's. The usage budget is the subsidy: the dollar value, at
+public API list prices <strong>in effect when the usage happened</strong>, of the Claude Code usage that one
+percentage point of the weekly limit covers. The comparison uses the same range of utilization in both
+weeks. It reads one of the following, or nothing:</p>
+<ul>
+  <li><code>Usage budget similar to last week</code></li>
+  <li><code>Usage budget down 25% from last week</code> or <code>up 20%</code>: a clear change of 20% or more</li>
+  <li><code>Usage budget down ~15% from last week</code>: a smaller change, or any change read early in the week, marked with “~”</li>
+</ul>
+<p style="margin-bottom:0">The line favors being visible over being certain. It appears once <strong>both
+weeks have passed 30%</strong>, the reading has stopped moving as the span grows, and Claude Code accounts for at least a
+quarter of each week's usage. When
+something could explain the number, such as a price change, a new model mix, or usage outside Claude Code,
+the tooltip says so rather than hiding the line. The other gates in <a href="#gates">§5</a> only catch
+missing or broken data. The math was put through an adversarial review; <a href="#review">§13</a> lists what changed. Readings are also recorded when they are not shown, so the thresholds can be tuned
+from evidence (<a href="#readings">§6.4</a>).</p>
+</div>
+
+<p>The work follows the tracking system that CLU-3 §11 designed. It adds a transcript scanner, a
+per-poll calibration log, and a tick-crossing estimator, and then shows the estimator's matched-span
+comparison in the panel. It also adds something the spike did not have: a <strong>dated price
+history</strong> fetched from Anthropic's pricing page, so each request is priced at the rate in effect
+when it was made (<a href="#pricing">§6.2</a>). The feature does not show an absolute dollar figure for
+the limit (see <a href="#scope">§10</a>).</p>
+
+<div class="mocks" aria-label="Popover mock of the Weekly row">
+  <div class="mockcol">
+    <div class="pop">
+      <div class="row-head"><span class="lab">WEEKLY</span><span class="pct">81<small>%</small></span></div>
+      <div class="bar"><div class="fill" style="width:81%"></div><div class="mark" style="left:82.5%"></div></div>
+      <div class="foot">
+        <svg width="10" height="10" viewBox="0 0 10 10"><path d="M2 5.2 L4 7.2 L8 3" fill="none" stroke="rgba(255,255,255,.55)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>On pace</span><span style="color:rgba(255,255,255,.4)">·</span><span>Resets Fri at 3:00 PM</span>
+      </div>
+      <div class="trend new">
+        <svg width="10" height="10" viewBox="0 0 10 10"><path d="M2 3.8 H8 M2 6.2 H8" fill="none" stroke="rgba(255,255,255,.55)" stroke-width="1.3" stroke-linecap="round"/></svg>
+        <span>Usage budget similar to last week</span>
+      </div>
+    </div>
+    <span class="mockcap">Similar · within about ±10%</span>
+  </div>
+  <div class="mockcol">
+    <div class="pop">
+      <div class="row-head"><span class="lab">WEEKLY</span><span class="pct">78<small>%</small></span></div>
+      <div class="bar"><div class="fill hollow" style="width:78%"></div><div class="mark" style="left:57%"></div></div>
+      <div class="foot">
+        <svg width="10" height="10" viewBox="0 0 10 10"><path d="M2.5 7.5 L7.5 2.5 M4 2.5 H7.5 V6" fill="none" stroke="#fff" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span class="strong">Ahead of pace</span><span style="color:rgba(255,255,255,.4)">·</span><span>Resets Fri at 3:00 PM</span>
+      </div>
+      <div class="trend down new">
+        <svg width="10" height="10" viewBox="0 0 10 10"><path d="M5 2 V8 M2.5 5.5 L5 8 L7.5 5.5" fill="none" stroke="#fff" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>Usage budget down 25% from last week</span>
+      </div>
+    </div>
+    <span class="mockcap">Down · emphasized like “Ahead of pace”</span>
+  </div>
+  <div class="mockcol">
+    <div class="pop">
+      <div class="row-head"><span class="lab">WEEKLY</span><span class="pct">38<small>%</small></span></div>
+      <div class="bar"><div class="fill" style="width:38%"></div><div class="mark" style="left:45%"></div></div>
+      <div class="foot">
+        <svg width="10" height="10" viewBox="0 0 10 10"><path d="M2 5.2 L4 7.2 L8 3" fill="none" stroke="rgba(255,255,255,.55)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>On pace</span><span style="color:rgba(255,255,255,.4)">·</span><span>Resets Fri at 3:00 PM</span>
+      </div>
+      <div class="trend new">
+        <svg width="10" height="10" viewBox="0 0 10 10"><path d="M5 2 V8 M2.5 5.5 L5 8 L7.5 5.5" fill="none" stroke="rgba(255,255,255,.55)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>Usage budget down ~15% from last week</span>
+      </div>
+    </div>
+    <span class="mockcap">Approximate · 10–20%, or early in the week · not emphasized</span>
+  </div>
+</div>
+<p style="font-size:.84rem;color:var(--muted)">Mock only. The dashed outline marks the new line and is
+not part of the design. Every other element is today's Weekly row, transcribed from
+<code>PopoverView.swift</code>. When a hiding gate fails, the row looks exactly as it does today.</p>
+
+<h2 id="decisions">2. Decisions</h2>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Question</th><th>Decision</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td>What does the budget measure?</td>
+        <td><strong>The subsidy: API dollars at the prices in effect when the usage happened,</strong> per percentage point of the weekly limit <em>(ticket owner, in refinement)</em></td>
+        <td>The question is “how much subsidized usage am I getting, and is that changing?” Tokens are not a stable unit of work, because newer models do more
+            per token, so a fixed-price “amount of work” measure answers a different question. <strong>This deliberately overrides CLU-3's advice to freeze the price table.</strong>
+            Example: Opus's list price drops 20%, and the dollar amount the plan allows drops 20% too. In usable work that's roughly a wash, but the subsidy
+            fell 20%, and that's worth knowing. So the line says “down 20%”, and the tooltip explains that with the same prices in both weeks it would read
+            “similar” (<a href="#copy">§3</a>). A frozen table would say “similar” and hide the drop.</td></tr>
+    <tr><td>Where do prices come from?</td>
+        <td><strong>Anthropic's pricing page, fetched as markdown once a day,</strong> kept as a dated history, with a built-in table as the fallback <em>(ticket owner, in refinement)</em></td>
+        <td>A new model or a price change is picked up without a code change. The page is published by Anthropic, the only company the app already talks to.
+            LiteLLM's JSON was considered: it is easier to parse, but it would add a download from GitHub, a third party. The Models API has no price fields.</td></tr>
+    <tr><td>When is the line allowed to appear?</td>
+        <td><strong>Matched span, both weeks ≥ 30%.</strong> Below 50% the reading is marked “~” as an early read <em>(ticket owner, in refinement; first set at 50%, then lowered for visibility)</em></td>
+        <td>A span gate alone isn't enough. Review showed that a week's work can be spread so unevenly that early readings swing by more than
+            50% (<a href="#gates">§5</a> replay), so a stability check (G13) now decides when an early reading appears. The 30% gate stays as the
+            earliest possible point, and readings under 50% are marked “~”. Shadow readings (<a href="#readings">§6.4</a>) measure how far readings still
+            move. The 70% gate from the spike is for an <em>absolute</em> estimate, which this feature does not show.</td></tr>
+    <tr><td>How is the rate measured?</td>
+        <td><strong>A block-mean span rate against Claude Code points</strong>, not an OLS slope divided by one share <em>(adversarial review)</em></td>
+        <td>The OLS slope on cumulative data weights the middle of the span most and the ends not at all, so it doesn't measure “the first S%”. One
+            cumulative share is the wrong divisor once the span starts above 0 or the share drifts. See <a href="#estimator">§4.4</a>.</td></tr>
+    <tr><td>Backfill past weeks from <code>claude-usage.log</code>?</td>
+        <td><strong>No. Start recording fresh</strong> <em>(chosen by the ticket owner)</em></td>
+        <td>The log never recorded Claude Code's share of usage, so backfilled weeks would have to
+            assume 100%, which misreads quiet weeks like 2026-09-11. The log also rotates; it now reaches back only to 2026-09-12.</td></tr>
+    <tr><td>Where does a week start?</td>
+        <td><strong>At the weekly reset time from the OAuth usage endpoint:</strong> <code>seven_day.resets_at − 7 days</code> <em>(ticket owner, in refinement)</em></td>
+        <td>This is the same source the app already uses for the Weekly row's reset countdown and pace mark
+            (<code>UsageSnapshot.compute</code>), so the comparison's week always matches the week on screen.
+            <code>seven_day_breakdown.window_started_at</code> is used only as a cross-check (<a href="#engine">§6.6</a>).</td></tr>
+    <tr><td>What is “last week”?</td>
+        <td>The window that reset <em>into</em> the current one: its reset time equals the current start, within 1 hour.</td>
+        <td>If the weeks are not back to back (for example, a week with no usage at all), there is no honest “last week”, so nothing is shown.
+            The line never falls back to an older week.</td></tr>
+    <tr><td>Show direction both ways?</td>
+        <td>Yes: down, up, and same.</td>
+        <td>The ticket gives “down” as an example. An increase is equally meaningful and uses the same math.</td></tr>
+    <tr><td>How to express “significant confidence”?</td>
+        <td><strong>Graded wording, not a dead band:</strong> within about ±10% reads “similar”, under 20% reads “~N%” without emphasis, and 20% or more
+            reads “N%”, emphasized when down <em>(ticket owner, in refinement)</em></td>
+        <td>Hiding the 10–20% band would hide exactly the size of a quiet cut worth knowing about. The random error of a reading is a few percent.
+            The error that matters is systematic: how the week's work (cache-read share, model, and off-Mac usage) is spread across the span. How large
+            that is across ordinary weeks isn't known yet, and it is what the shadow readings measure. Emphasis is kept for readings that are not approximate.</td></tr>
+    <tr><td>Model mix and usage outside Claude Code</td>
+        <td><strong>Explain in the tooltip rather than hide</strong>, unless Claude Code is under a quarter of a week's usage <em>(ticket owner, in refinement)</em></td>
+        <td>A model switch would otherwise hide the line for about two weeks, and one is happening now (Opus 5 → Opus 5.5). Under the subsidy framing a switch
+            really does change the subsidy received, so it is shown and flagged. The Claude Code floor was lowered to 25% because the owner runs many sessions
+            outside the terminal. Below that, as in the week of 2026-09-11 (about 12%), there is too little local usage to measure, so the line still hides.
+            At low shares, the Claude Code points floor in G6 and the stability check (G13) are what protect the reading.</td></tr>
+    <tr><td>Wording of the “similar” line</td>
+        <td><code>Usage budget similar to last week</code> rather than the ticket's “About the same usage as last week”.</td>
+        <td>The ticket's phrase could be read as “you used about the same amount”, which is a different claim. Making all three lines start with
+            “Usage budget …” keeps them parallel and unambiguous. “About the same as” was tried first and measured 0.4pt too wide for the panel (§3).</td></tr>
+  </tbody>
+</table></div>
+
+<h2 id="copy">3. What the line says</h2>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Reading</th><th>Shown text</th><th>Glyph</th><th>Style</th></tr></thead>
+  <tbody>
+    <tr><td>Similar: |ln r| &lt; ln 1.10, meaning r is between 0.91 and 1.10</td><td><code>Usage budget similar to last week</code></td><td>two short bars (equals)</td><td>white 55%, regular</td></tr>
+    <tr><td>Clear drop: N ≥ 20 and the span reaches 50%</td><td><code>Usage budget down N% from last week</code></td><td>straight down arrow</td><td>white, medium (same emphasis as “Ahead of pace”)</td></tr>
+    <tr><td>Clear rise: N ≥ 20 and the span reaches 50%</td><td><code>Usage budget up N% from last week</code></td><td>straight up arrow</td><td>white 55%, regular</td></tr>
+    <tr><td>Approximate: N &lt; 20, or any change while the span is under 50%</td><td><code>Usage budget down ~N% from last week</code> / <code>up ~N%</code></td><td>straight arrow</td><td>white 55%, regular</td></tr>
+    <tr><td>A hiding gate fails (§5)</td><td colspan="3"><em>Nothing.</em></td></tr>
+  </tbody>
+</table></div>
+
+<ul>
+  <li><strong>r</strong> is <code>k_this / k_last</code>, where <code>k</code> is local API dollars per Claude Code percentage point of the weekly limit,
+      at the prices of the time (<a href="#estimator">§4</a>). “Down” means one percentage point now covers fewer API dollars, so the subsidy shrank.</li>
+  <li><strong>The reading</strong> is derived from r in one place, so the “~” and the number can never disagree:
+<pre><code>reading(r):
+    if |ln r| &lt; ln 1.10            → similar       // symmetric: swapping the weeks never changes the band
+    direction = r &lt; 1 ? down : up
+    N = max(10, 5 · ⌊|r − 1| · 100 / 5 + 0.5⌋)     // nearest 5, halves round up, never below 10
+approximate = N &lt; 20 or earlyRead               // shows “~”
+emphasized  = direction == down and not approximate</code></pre>
+      A 23% drop reads “down 25%”; a 12% drop reads “down ~10%”. Rounding to 5 avoids suggesting more precision than the method has.</li>
+  <li>The arrows are <em>straight</em> (vertical), not the diagonal arrow the pace footnote uses, so “budget up” is never
+      confused with “ahead of pace”.</li>
+  <li>The line has a hover tooltip (<code>.help</code>) that states what it measures:
+      <code>API-price value of the Claude Code usage each 1% of your weekly limit covered, at the prices of the time, this week vs. last week, from L% to S% of each week.</code>
+      L and S are the ends of the matched span. When L is under 1%, the tooltip says “over the first S% of each week” instead.</li>
+  <li><strong>Tooltip notes.</strong> After the first sentence, the tooltip adds any of these that apply, in this order (conditions in <a href="#estimator">§4.4</a>):
+    <ol>
+      <li><em>Early read</em> (span under 50%): <code>Early read: based on the first S% of each week, so it may still move.</code></li>
+      <li><em>Prices changed</em> (a price used in either week changed since last week began, and pricing both weeks the same way gives a different reading):
+          <code>API prices changed since last week. With the same prices in both weeks this would read “similar”.</code>
+          When that reading is “similar”, add <code>In usable work, that's roughly a wash.</code>
+          This separates a subsidy change caused by a price move from one caused by the plan.</li>
+      <li><em>Model mix changed</em>: <code>Your model mix changed: last week was mostly Opus 5, this week mostly Opus 5.5. That alone can move this number.</code>
+          The “mostly” clause appears only when the top model differs.</li>
+      <li><em>Cache-read share changed</em>: <code>Cache reads were 87% of this week's local dollars and 63% of last week's. The plan may not count them at list price, and that alone can move this number.</code>
+          See <a href="#risks">§11</a> for why this matters.</li>
+      <li><em>Usage outside Claude Code</em> (Claude Code under 90% of either week):
+          <code>Claude Code was 72% of this week's usage and 94% of last week's. Only sessions on this Mac are measured; the rest is assumed to count against the limit the same way.</code></li>
+    </ol></li>
+  <li><strong>Width.</strong> The line must fit on one line in 248pt of content width (280 minus 16 on each side). Measured at 11.5pt SF with
+      <code>NSAttributedString</code>, including the 10pt glyph and 4pt spacing: “Usage budget similar to last week” is 198pt,
+      “Usage budget down ~15% from last week” 240pt, “Usage budget down 85% from last week” (medium) 240pt, and “Usage budget up ~105% from last week” 232pt.
+      The earlier wording, “about the same as last week”, measured 248.4pt and would have been cut off. Confirm with <code>--render-popover</code>.</li>
+</ul>
+
+<h2 id="estimator">4. How the comparison is computed</h2>
+
+<p>This builds on the CLU-3 §11 tick-crossing idea, with three changes, two of them from the adversarial review
+(<a href="#review">§13</a>). The rate is a block-mean span rate against Claude Code points instead of an OLS slope (§4.4). Dollars are rebuilt
+from each record's token counts when the comparison runs, at the prices in effect at each record's time (§4.2). Ticks are interpolated across
+gaps between polls (§4.3).</p>
+
+<h3>4.1 Window identity</h3>
+<ul>
+  <li><code>windowStart = seven_day.resets_at − 7d</code>, rounded to the nearest minute. The endpoint's
+      <code>resets_at</code> jitters by fractions of a second between fields and polls (for example <code>18:59:59.720162</code> and
+      <code>18:59:59.719877</code> in the existing test fixtures). The rounded value is the window key.</li>
+  <li>When <code>seven_day.resets_at</code> is null, the window is empty or fresh: no record is written and no comparison is shown.</li>
+  <li>The previous window is the recorded window whose <code>windowStart + 7d</code> is within 1 hour of the current <code>windowStart</code>.</li>
+</ul>
+
+<h3>4.2 Cost at the prices of the time</h3>
+<p>Records store cumulative token counts per model since the window started (<a href="#log">§6.4</a>). When the comparison runs, cost is rebuilt
+from the token increments between consecutive records, and each increment is priced with the history entry in effect at that record's time:</p>
+<pre><code>Δtok_j[m] = max(0, tokens_j[m] − tokens_{j−1}[m])     // consecutive records from one writer, same window; tokens_{−1} = 0
+c_i       = Σ_{j ≤ i} Σ_m price(Δtok_j[m], PriceHistory.rates(m, at: capturedAt_j))
+price(t, p) = t.input·p.in + t.cw5m·p.cw5m + t.cw1h·p.cw1h + t.cacheRead·p.read + t.output·p.out   (per MTok)
+            + t.webSearch · $0.01                     // standard-speed keys only; "/fast" keys are excluded (G8)</code></pre>
+<ul>
+  <li>Records are at most 30 minutes apart, which is finer than the price history's own daily resolution, so this is still time-of-use pricing.</li>
+  <li>Because cost is rebuilt on every evaluation, a model the daily fetch prices later, or a price change detected late, is corrected in every
+      record at once. No step appears in <code>c</code>, and a week does not stay hidden after the fix arrives. The scanner's per-record
+      <code>cost</code> field is informational (logs and debugging) and is not used here.</li>
+  <li>The same sum with the latest rates for every increment gives the <strong>equal-price</strong> cost <code>c′</code>, which is used only for the
+      price note. The same sum over non-cache-read token classes gives <code>c<sup>nr</sup></code>, which is recorded in shadow readings (§6.4).</li>
+  <li>Every record carries a <code>writer</code>. Deltas between two interleaved writers would double-count, so each window is evaluated from one
+      writer's series: the app's, or else the writer with the most records.</li>
+</ul>
+
+<h3>4.3 Ticks</h3>
+<p>The records of one window, sorted by <code>capturedAt</code>, are <code>r₀…rₙ</code>. Each has integer utilization
+<code>uᵢ = round(weeklyPct)</code>, Claude Code share <code>sᵢ = surfaceShares.claude_code / 100</code>, and cost <code>cᵢ</code> from §4.2.
+Track the running maximum <code>M</code>. Whenever <code>uᵢ &gt; M</code>, each crossed half-point becomes one tick:</p>
+<pre><code>s = uᵢ − M                                  // points crossed between rᵢ₋₁ and rᵢ
+for j in 1...s:
+    x   = M + j − 0.5                       // true utilization crossed this value
+    y   = cᵢ₋₁ + (j − 0.5)/s · (cᵢ − cᵢ₋₁)  // cost interpolated across the gap
+    xcc = x · sᵢ                            // Claude Code percentage points at the crossing
+    gap = s &gt; 2                             // inferred across a long gap
+M = uᵢ</code></pre>
+<p>For the usual single-point step this puts <code>y</code> at the midpoint of the two polls, which is at most half of one poll's spend from the
+spike's convention of using <code>cᵢ</code>. Interpolation matters when the Mac slept or the app was quit while usage moved several points.
+Gap ticks lie on the straight line between two polls by construction, so they carry no information of their own. They are kept, but they do not
+count toward G4. Removing any 6 hours of polls from the week of 2026-09-18 changed its rate by at most 1.6%. A decrease in utilization inside a
+window emits nothing, and <code>M</code> keeps its value; none occurred in 3,729 polls.</p>
+
+<h3>4.4 Matched span and span rate</h3>
+<pre><code>lo = max(firstTick_this, firstTick_last)          // first crossing both weeks observed
+hi = min(lastTick_this,  lastTick_last)           // last crossing both weeks reached
+for each week w, with ticks restricted to lo ≤ x ≤ hi:
+    head_w = ticks with x ≤ lo + 4                // 5 ticks
+    tail_w = ticks with x ≥ hi − 4                // 5 ticks
+    k_w    = (mean(tail_w.y) − mean(head_w.y)) / (mean(tail_w.xcc) − mean(head_w.xcc))
+                                                  // local $ per Claude Code point, across the span
+r      = k_this / k_last                          // the headline; Δ = r − 1
+stable = | r(lo, hi) − r(lo, hi − 10) | ≤ 0.10    // same computation with the span cut 10 points short (G13)</code></pre>
+<ul>
+  <li><strong>Why not an OLS slope.</strong> For evenly spaced cumulative data, the OLS slope is a weighted average of the per-point increments,
+      with parabolic weights: zero at the ends and 1.5× uniform in the middle. It does not measure “the first S%”, and its weights shift every
+      time <code>hi</code> grows. In the week of 2026-09-18 it gave $8.94/pp at 79.5% against a true span average of $6.50/pp, because the
+      expensive 30–50% stretch sat mid-span. The block-mean rate is exactly the span average the tooltip describes. Averaging 5 ticks at each
+      end damps timing error at the endpoints. Its standard error is not computed and must never be shown (CLU-3 §11).</li>
+  <li><strong>Why Claude Code points.</strong> Dividing by one cumulative share is wrong once the span starts above 0 (G2 is gone) or the share
+      drifts inside the span. For example, with a 50% share at <code>lo = 40</code> and 70% at <code>hi = 70</code>, the span's own share is
+      (70·0.70 − 40·0.50) / 30 = 0.97, and dividing by 0.70 overstates <code>k</code> by 38%. Measuring against <code>xcc</code> uses the share at
+      each end, so drift is accounted for. Comparing <code>k</code> across weeks still assumes other surfaces count against the limit the same way
+      per point, the same assumption as before.</li>
+  <li><strong>Where the error comes from.</strong> Random error is a few percent: the local spend in the two minutes before a tick had a median
+      of $0.12 and a 90th percentile of $4 in the week of 2026-09-18. The error that matters is systematic: how the week's work is spread
+      across the span. In that week, local cost per point by 10-point band was $0, 0, 7.9, 11.8, 19.2, 4.6, 0.4, and 2.0, and the span rate
+      from 0.5 moved from $2.36 (at 29.5%) to $8.64 (49.5%) to $6.50 (79.5%). The spike's cut-off table (§11) shows the same effect with the
+      opposite sign in a different week, so this is a property of the week, not a bias that can be corrected. Matching spans cancels it only
+      when both weeks have a similar profile. The stability check (G13) is what keeps a still-moving reading off the screen.</li>
+</ul>
+<pre><code>// tooltip notes only (§3); they never change the headline
+earlyRead = hi &lt; 49.5
+priceNote = a price used in either week changed since last week began
+            and reading(r′) ≠ reading(r)              // r′ from c′ (§4.2)
+mixNote   = TVD(cost share by model ID over the span, this vs last) &gt; 0.20
+readNote  = | readShare_this − readShare_last | &gt; 0.10  // cache-read $ / local $ over the span
+covNote   = min(s at hi this week, s at hi last week) &lt; 0.90</code></pre>
+
+<h2 id="gates">5. Gates</h2>
+
+<p>Only the gates marked <strong>Hides</strong> suppress the line. G3, G6, and G13 are the confidence gates; the others catch missing or
+broken data. G2, G9, and G11 were loosened in refinement; G10 was redefined and G13 added after the adversarial review (<a href="#review">§13</a>).
+Retired gates stay in the table, marked, so the history is traceable and the numbering used elsewhere holds. Thresholds are named constants in
+one place (<code>CapEstimator.Config</code>) so they can be tuned from shadow readings (<a href="#readings">§6.4</a>).</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>#</th><th>Check</th><th class="num">Threshold</th><th>Effect</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td>G1</td><td>Previous window recorded and back to back (<a href="#estimator">§4.1</a>)</td><td class="num">±1 h</td><td>Hides</td><td>No honest “last week” otherwise.</td></tr>
+    <tr><td>G2</td><td><s>Both windows recorded from near their start</s></td><td class="num">—</td><td>Removed</td><td>G4's span floor already requires enough overlap. Dropping it lets a partly recorded first week count, so the first comparison can come a week sooner.</td></tr>
+    <tr><td>G3</td><td>Both windows reached the gate: max <code>weeklyPct</code></td><td class="num">≥ 30%</td><td>Hides</td><td>Lowered from 50% in refinement for visibility. Readings under 50% are marked early (§3). G13 decides whether an early reading is steady enough to show.</td></tr>
+    <tr><td>G4</td><td>Non-gap ticks in the matched span, per week</td><td class="num">≥ 30</td><td>Hides</td><td>A span-length floor: at least 30 measured points of overlap. Ticks are not independent samples (the cumulative series has lag-1 autocorrelation of about 0.99), so this is not a sample-size argument.</td></tr>
+    <tr><td>G5</td><td>Share of gap ticks (step &gt; 2 points), per week</td><td class="num">≤ 25%</td><td>Hides</td><td>Too much interpolation means the reading is mostly assumption. Observed: 10% in both recorded windows.</td></tr>
+    <tr><td>G6</td><td>Claude Code share present; share at <code>hi</code>; and Claude Code points across the span, <code>mean(tail.xcc) − mean(head.xcc)</code></td><td class="num">≥ 25%; ≥ 15 pts</td><td>Hides; note under 90%</td><td>Without the share, a silent cut looks the same as working elsewhere (CLU-3 §8). The week of 2026-09-11 (about 12%) fails. The points floor is the rate's denominator: below 15, a few dollars of noise move <code>k</code> a lot. Caveat: the share may include Claude Code on the web, which this Mac cannot see (<a href="#risks">§11</a>).</td></tr>
+    <tr><td>G7</td><td>Unpriced requests over the span, checked at evaluation after repricing (§4.2)</td><td class="num">≤ 1%</td><td>Hides</td><td>Fails loudly on a model with no known price rather than silently under-counting. Because cost is rebuilt each time, the week recovers as soon as the daily fetch prices the model. The log names the model.</td></tr>
+    <tr><td>G8</td><td>Fast-mode spend (<code>usage.speed == "fast"</code>, priced at 2× as an estimate)</td><td class="num">≤ 5%</td><td>Hides</td><td>It is unknown how the plan counts fast mode, so its tokens are recorded but excluded from cost. None was seen locally in either recorded window.</td></tr>
+    <tr><td>G9</td><td>Model mix shift: total-variation distance of cost share by model ID over the span</td><td class="num">&gt; 0.20</td><td>Tooltip note</td><td>Model mix is a major confounder (CLU-3 §8, §11), but under the subsidy framing a switch really does change the subsidy received. Opus 5 and Opus 5.5 count as <em>different</em> models. Changed from hiding to a note in refinement.</td></tr>
+    <tr><td>G10</td><td>Sanity: <code>k &gt; 0</code> in both weeks; local $ over the span; <code>xcc</code> non-decreasing across the span within share rounding (0.5% of <code>weeklyPct</code>)</td><td class="num">≥ $25 per week</td><td>Hides</td><td>Catches a dead scanner, a transcript format change, or a breakdown that isn't cumulative. Replaces the earlier R² ≥ 0.90 check, which on cumulative data measures trend, not fit: in the week of 2026-09-18 it would have hidden the line all week (R² 0.41 at 30%, reaching 0.90 only at 82%), while a synthetic series whose rate triples mid-span passes it with R² 0.94.</td></tr>
+    <tr><td>G11</td><td><s>Dead band on |Δ|</s></td><td class="num">—</td><td>Removed</td><td>Replaced by graded wording (“~N%” below 20%) in <a href="#copy">§3</a>.</td></tr>
+    <tr><td>G12</td><td>Prices are current: last successful pricing-page fetch</td><td class="num">≤ 7 days ago</td><td>Hides</td><td>Prices are part of the answer. If the fetch has been failing, for example because the page format changed, a price change could be missed and the subsidy misstated.</td></tr>
+    <tr><td>G13</td><td>Stable reading: <code>| r(lo, hi) − r(lo, hi − 10) |</code></td><td class="num">≤ 0.10</td><td>Hides</td><td>Added after review. Early in a week the reading can swing because the week's work is not spread evenly. G13 holds a reading back while extending the span by 10 points still moves it. A week with evenly spread local usage shows from 30%. It limits the profile error but does not remove it: see the replay below.</td></tr>
+  </tbody>
+</table></div>
+
+<p><code>CapEstimator</code> returns either a trend or the <em>first</em> failing gate as a typed reason
+(<code>.hidden(.belowGate(this: 24, last: 72))</code>, <code>.hidden(.unstable(r: 0.62, rShort: 0.81))</code>, and so on). The engine logs the
+result only when it changes, for example <code>Budget trend: down 20% (k $6.40 vs $8.00 per Claude Code point over 0.5–54.5%, share 94%/92%, ticks 54/54, prices 2026-10-05; notes: prices→similar)</code>
+or <code>Budget trend: hidden — unstable (r 0.62, 0.81 ten points earlier)</code>.</p>
+
+<div class="callout warn">
+  <span class="lbl">Replay: the week of 2026-09-18 with these gates</span>
+  <p>Span-average rates measured in review, against a hypothetical last week that ran evenly at this week's final rate
+  ($6.50 per point). No share history exists for that week, so this uses local dollars per utilization point, not per Claude Code point.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th class="num">Span to</th><th class="num">r</th><th>Reading</th><th class="num">|r − r(−10)|</th><th>G13</th></tr></thead>
+    <tbody>
+      <tr><td class="num">29.5%</td><td class="num">0.36</td><td>down ~65%</td><td class="num">—</td><td>hidden</td></tr>
+      <tr><td class="num">39.5%</td><td class="num">0.79</td><td>down ~20%</td><td class="num">0.42</td><td>hidden</td></tr>
+      <tr><td class="num">49.5%</td><td class="num">1.33</td><td>up 35%</td><td class="num">0.54</td><td>hidden</td></tr>
+      <tr><td class="num">59.5%</td><td class="num">1.27</td><td>up 25%</td><td class="num">0.06</td><td><strong>shown</strong></td></tr>
+      <tr><td class="num">69.5%</td><td class="num">1.10</td><td>up ~10%</td><td class="num">0.17</td><td>hidden</td></tr>
+      <tr><td class="num">79.5%</td><td class="num">1.00</td><td>similar</td><td class="num">0.10</td><td>borderline</td></tr>
+    </tbody>
+  </table></div>
+  <p>G13 would have kept the wildest readings off the screen, but on Tuesday it would have shown “up 25%” for a week that ended “similar”.
+  Two things could make real weeks better than this replay. First, if that week's empty first 20 points were Cowork usage, the per-point
+  Claude Code share would absorb them. Second, if last week had a similar shape, matched spans cancel it. Neither can be checked from the
+  data that exists. This is the error the shadow readings are there to measure, and the reason a reading stays labeled as an estimate.</p>
+</div>
+
+<h2 id="components">6. Components and file changes</h2>
+
+<h3>6.1 <code>UsagePoller.swift</code>: decode the breakdown</h3>
+<p>Add an optional <code>sevenDayBreakdown: SevenDayBreakdown?</code> to <code>UsageResponse</code>
+(key <code>seven_day_breakdown</code>) with <code>windowStartedAt: Date?</code> and
+<code>rows: [Row]</code>, where <code>Row</code> has <code>key</code>, <code>displayName</code>, and
+<code>percent: Double</code>. All fields are optional, and a missing object decodes to <code>nil</code>,
+so the existing test payloads, which have no breakdown, still decode. Add a
+<code>surfaceShares: [String: Double]</code> convenience keyed by <code>row.key</code>. The CLU-3 sample
+response is the fixture. No other fields are decoded (<a href="#scope">§10</a>).</p>
+<p><strong>Check during implementation:</strong> capture one live <code>seven_day_breakdown</code> from a week that included Claude Code on the web.
+Local transcripts only cover the <code>cli</code>, <code>sdk-cli</code>, <code>claude-vscode</code>, and <code>claude-desktop</code> entry points; web
+sessions run in the cloud and leave nothing on this Mac. If the breakdown gives web sessions their own row, subtract it and use the local-only share
+as <code>cov</code>. If web sessions are folded into <code>claude_code</code>, keep the formula but record that finding in this spec, because
+<code>cov</code> then overstates what is local (<a href="#risks">§11</a>).</p>
+
+<h3 id="pricing">6.2 <code>PriceHistory.swift</code> and <code>PricingFetcher.swift</code> (new, Core)</h3>
+<p>This is a dated history of list-price tables. It answers “what did model <em>m</em> cost at time <em>t</em>?”
+It is kept current by fetching Anthropic's pricing page, and it falls back to a built-in table.</p>
+
+<h4>Source</h4>
+<ul>
+  <li><code>GET https://platform.claude.com/docs/en/about-claude/pricing.md</code>. Anthropic serves its docs pages as markdown at a
+      <code>.md</code> URL, about 47&nbsp;KB. The request is a plain GET <strong>with no Authorization header</strong>, so the OAuth token never goes to the
+      docs site. The timeout is 10&nbsp;s.</li>
+  <li>The engine tries at most once every 24 hours, as an extra step after a successful usage poll, never on its own timer. After a failure it retries
+      on the next poll that is at least 1 hour later.</li>
+  <li>Considered and rejected: LiteLLM's <code>model_prices_and_context_window.json</code>, the source ccusage uses. It is keyed by exact model ID and matched
+      Anthropic's numbers for all six models on 2026-09-24. But it is a 2.9&nbsp;MB download from GitHub, which would break the README's “no third-party
+      servers” promise. The Models API (<code>/v1/models</code>) has no price fields and needs an API key the app does not have.</li>
+</ul>
+
+<h4>Parsing</h4>
+<ul>
+  <li>Locate the model table by its exact header row:
+      <code>Model | Base input tokens | 5m cache writes | 1h cache writes | Cache hits and refreshes | Output tokens</code>.
+      Parse rows until the table ends.</li>
+  <li>In each model cell, strip markdown links, parentheticals such as <code>(retired, …)</code> and <code>(limited availability)</code>, and
+      <code>&lt;sup&gt;…&lt;/sup&gt;</code> footnote markers. Then derive the ID from the name: lowercase it and turn spaces and dots into hyphens,
+      so “Claude Opus 5.5” becomes <code>claude-opus-5-5</code>.
+      Each price cell must match <code>$&lt;decimal&gt; / MTok</code> once footnote markers are removed.</li>
+  <li><strong>Validation. The fetch is rejected as a whole if any check fails:</strong>
+      the header matches; at least 5 rows parse; no more than half of the models already in the history are missing, since a larger loss
+      points to a parse problem; and each row has cache read &lt; input &lt; 5m write &lt; 1h write and input &lt; output.
+      On rejection, keep the last good table and log the reason once per day.</li>
+  <li>A model that disappears from the page, for example after retirement, keeps its last known rates. Models are never dropped from the history.</li>
+  <li>Prose footnotes, such as the note that Sonnet 5's scheduled 2026-09-01 increase was cancelled, are not parsed. A change counts once it
+      appears in the table.</li>
+</ul>
+
+<h4>History and lookup</h4>
+<ul>
+  <li>Stored in <code>~/Library/Application Support/claude-usage-menu-bar/pricing/</code>:
+      <code>history.jsonl</code> gets one line per <em>distinct</em> table,
+      <code>{"effectiveFrom", "fetchedAt", "source", "rates": {id: {name, in, cw5m, cw1h, read, out}}}</code>, appended only when the rates differ from the
+      latest entry. <code>state.json</code> holds <code>lastAttemptAt</code> and <code>lastSuccessAt</code>, which gate G12.</li>
+  <li><code>effectiveFrom</code> is the fetch time at which a change was first seen. That is up to 24 hours after the real change, plus however long
+      the page takes to update. The built-in table below is the implicit first entry, with <code>effectiveFrom</code> in the distant past.</li>
+  <li><code>rates(model, at: t)</code>: normalize the ID by stripping a trailing <code>-YYYYMMDD</code>. Transcripts record Haiku as
+      <code>claude-haiku-4-5-20251001</code>, which the spike's table did not match. Then return the model's rates from the entry in effect at
+      <code>t</code>. If the model is missing from that entry, use the <em>earliest later</em> entry that has it, so a new model's launch price
+      applies back to its first use. If no entry has it, return <code>nil</code>, never a guess.</li>
+  <li><code>priceChanged(models, since: t)</code> reports whether any of those models' rates differ between the entry in effect at <code>t</code> and the latest entry.
+      It drives the tooltip attribution in §3.</li>
+</ul>
+
+<h4>Built-in fallback table (checked against the live page on 2026-09-24)</h4>
+<div class="tablewrap"><table>
+  <thead><tr><th>Model ID</th><th class="num">Input</th><th class="num">5m write</th><th class="num">1h write</th><th class="num">Cache read</th><th class="num">Output</th></tr></thead>
+  <tbody>
+    <tr><td><code>claude-opus-5-5</code></td><td class="num">$4.00</td><td class="num">$5.00</td><td class="num">$8.00</td><td class="num">$0.20</td><td class="num">$20.00</td></tr>
+    <tr><td><code>claude-opus-5</code></td><td class="num">$5.00</td><td class="num">$6.25</td><td class="num">$10.00</td><td class="num">$0.50</td><td class="num">$25.00</td></tr>
+    <tr><td><code>claude-fable-5-1</code></td><td class="num">$10.00</td><td class="num">$12.50</td><td class="num">$20.00</td><td class="num">$0.25</td><td class="num">$50.00</td></tr>
+    <tr><td><code>claude-fable-5</code></td><td class="num">$10.00</td><td class="num">$12.50</td><td class="num">$20.00</td><td class="num">$1.00</td><td class="num">$50.00</td></tr>
+    <tr><td><code>claude-sonnet-5</code></td><td class="num">$2.00</td><td class="num">$2.50</td><td class="num">$4.00</td><td class="num">$0.20</td><td class="num">$10.00</td></tr>
+    <tr><td><code>claude-haiku-4-5</code></td><td class="num">$1.00</td><td class="num">$1.25</td><td class="num">$2.00</td><td class="num">$0.10</td><td class="num">$5.00</td></tr>
+  </tbody>
+</table></div>
+<p>Per million tokens. Web search is $10 per 1,000 searches for every model; it is not in the page's model table, so it stays a constant.
+Opus 5.5 reads cache at 0.05× and Fable 5.1 at 0.025× input, both taken from the page's footnotes and already reflected in its table.
+<code>&lt;synthetic&gt;</code> rows are dropped by the scanner before pricing.</p>
+
+<h3>6.3 <code>TranscriptScanner.swift</code> (new, Core)</h3>
+<p>Produces <code>WindowUsage</code> for all requests with <code>windowStart ≤ timestamp ≤ capturedAt</code>. For each model key it holds
+the totals of <code>input</code>, <code>cacheWrite5m</code>, <code>cacheWrite1h</code>, <code>cacheRead</code>, <code>output</code>,
+<code>webSearch</code>, and <code>requests</code>. It also holds <code>cost</code>, where each request is priced by
+<code>PriceHistory.rates(model, at: request.timestamp)</code> (§4.2), and <code>unpriced</code>, the number of requests that got no rate.
+This cost is informational only. The estimator rebuilds cost from the token counts (§4.2).</p>
+<ul>
+  <li><strong>Root:</strong> <code>$CLAUDE_CONFIG_DIR/projects</code> if set, otherwise <code>~/.claude/projects</code>. Enumerate
+      <code>*.jsonl</code> <em>recursively</em>, because subagent transcripts live at <code>&lt;session&gt;/subagents/agent-*.jsonl</code>.
+      Skip files whose mtime is earlier than <code>windowStart</code>.</li>
+  <li><strong>Rows:</strong> <code>type == "assistant"</code> with a <code>message.usage</code> block. Use a cheap substring
+      prefilter before JSON decoding, and cover it with a test so it never rejects a valid row. Decode with a minimal
+      <code>Decodable</code> that declares <em>only</em> <code>timestamp</code>, <code>requestId</code>,
+      <code>sessionId</code>, <code>message.id</code>, <code>message.model</code>, and the usage numbers
+      (<code>input_tokens</code>, <code>cache_creation_input_tokens</code>,
+      <code>cache_creation.ephemeral_5m_input_tokens</code>, <code>cache_creation.ephemeral_1h_input_tokens</code>,
+      <code>cache_read_input_tokens</code>, <code>output_tokens</code>, <code>server_tool_use.web_search_requests</code>,
+      <code>speed</code>). Content fields are never modeled.</li>
+  <li><strong>Dedup (CLU-3 §4):</strong> group by <code>message.id + requestId</code>, falling back to
+      <code>sessionId + message.id</code> when <code>requestId</code> is missing. Merge with the <em>per-field maximum</em>, never
+      first-wins. A group's timestamp is the earliest row timestamp. The same request copied into a forked or resumed session collapses to one.</li>
+  <li><strong>Cache-write split:</strong> use <code>cache_creation.ephemeral_{5m,1h}</code> when present. Otherwise treat the flat
+      <code>cache_creation_input_tokens</code> as 5m.</li>
+  <li><strong>Model key:</strong> the model ID as written. Rows with <code>speed == "fast"</code> go under
+      <code>"&lt;model&gt;/fast"</code>, so G8 can measure them and the cost function can exclude them.</li>
+  <li><strong>Incremental:</strong> keep per-file state (inode, byte offset). Read from the offset to the last complete newline and
+      keep any trailing partial line for the next scan. A shrunk or replaced file is re-read from 0; the dedup map makes that idempotent.
+      Keep the per-request map for the current window only, and reset it when the window key changes.</li>
+  <li><strong>Isolation:</strong> it runs off the main actor (an <code>actor</code>, or a serial queue behind a continuation).
+      A missing or unreadable root returns <code>nil</code> and logs one warning. It never throws into the poll path.</li>
+</ul>
+
+<h3 id="log">6.4 <code>CalibrationLog.swift</code> (new, Core)</h3>
+<p>This is the append-only history CLU-3 asked for, so the series does not depend on the rotating <code>claude-usage.log</code>.</p>
+<ul>
+  <li><strong>Layout:</strong> one JSON Lines file per window,
+      <code>~/Library/Application Support/claude-usage-menu-bar/calibration/&lt;windowStart&gt;.jsonl</code>, with the name formatted like
+      <code>2026-09-25T1900Z.jsonl</code> (no colons). Finding last week means opening one small file. Files are never rotated or pruned.</li>
+  <li><strong>Record (v1):</strong>
+<pre><code>{"v":1,
+ "capturedAt":"2026-10-03T17:34:17Z",
+ "writer":"app",                                  // "app" or "daemon"; see §4.2
+ "windowStart":"2026-10-02T19:00:00Z",          // resets_at − 7d, minute-rounded
+ "weeklyPct":48,
+ "surfaceShares":{"claude_code":94,"cowork":6,"chat":0,"other":0},   // null if absent
+ "scopedPct":{"Fable":19},                       // from snapshot.weeklyModels; for later analysis
+ "usage":{"claude-opus-5-5":{"input":55652,"cacheWrite5m":0,"cacheWrite1h":60746483,
+                             "cacheRead":4189360597,"output":12055611,"webSearch":0,"requests":2074,
+                             "cost":1398.52,        // informational; the estimator reprices from tokens (§4.2)
+                             "unpriced":0}}}</code></pre>
+      Every value is a number, a model ID, a surface key, or a timestamp. Nothing else is possible by construction. Decoding ignores unknown
+      keys and skips an undecodable line, such as a partial last line after a crash.</li>
+  <li><strong>Write policy:</strong> the estimator needs the poll <em>before</em> and the poll <em>at</em> each utilization step,
+      not every poll. Hold the newest unwritten record as <code>pending</code>. For each new record <code>R</code>:
+    <ol>
+      <li>If <code>R</code> starts a new window, flush <code>pending</code> to its own window file, then write <code>R</code>.</li>
+      <li>Otherwise, if <code>round(weeklyPct)</code> or <code>surfaceShares</code> changed since the previous observation, flush <code>pending</code>, then write <code>R</code>.</li>
+      <li>Otherwise, if 30 minutes or more have passed since the last write, write <code>R</code> as a heartbeat.</li>
+      <li>Otherwise <code>R</code> replaces <code>pending</code>.</li>
+    </ol>
+      That is about 2 records per point plus a heartbeat every 30 minutes, roughly 450–550 records and 300–450&nbsp;KB per heavy week, against about
+      2.5&nbsp;MB if every 2-minute poll were logged.
+      At launch, the last written record is read back from the current window's file.</li>
+  <li id="readings"><strong>Shadow readings:</strong> <code>calibration/readings.jsonl</code> gets one line each time the reading changes, which is at most
+      once per new tick, about 80 lines a week. Fields:
+      <code>{evaluatedAt, windowStart, spanLower, spanUpper, kThis, kLast, ratio, ratioEqualPrices, ratioNonRead, ratioAtMinus10,
+      ccPointsThis, ccPointsLast, localDollarsThis, localDollarsLast, readShareThis, readShareLast, shareThis, shareLast, mixTVD,
+      ticksThis, ticksLast, gapShareThis, gapShareLast, shown, hiddenReason}</code>.
+      Shadow evaluation uses <code>Config.shadow</code>: G3 at 20%, G4 at 20 ticks, and G13 recorded rather than applied. Any other failing gate is
+      recorded as <code>hiddenReason</code>, with the ratio whenever it can still be computed. <code>ratioNonRead</code> is the same rate using only
+      non-cache-read dollars (§4.2).
+      <br><strong>What they can and cannot tune.</strong> Four weeks give three week pairs. That is enough to see how far readings at 20%, 30%, and
+      50% drift from each week's final reading, and so to tune G3, G13, and the 50% early-read cut-off. <code>readShare</code> and
+      <code>ratioNonRead</code> let a follow-up fit whether the plan counts cache reads at list price (§11). They <em>cannot</em> tune the 10%
+      “similar” band: that needs the spread of final readings in weeks with no real change, and nothing labels which weeks those are. The band
+      stays a judgment call.</li>
+  <li>A second writer, such as the dev <code>ClaudeUsageDaemon</code> running beside the app, adds interleaved records tagged with its own
+      <code>writer</code>. Each line is written with a single append. The estimator evaluates one writer's series per window (§4.2), because
+      token deltas taken across two writers would double-count.</li>
+</ul>
+
+<h3>6.5 <code>CapEstimator.swift</code> (new, Core, pure)</h3>
+<pre><code>public enum CapEstimator {
+    public struct Config { /* every §5 threshold, with the defaults above */ }
+    public static func evaluate(this: [CalibrationRecord], last: [CalibrationRecord],
+                                prices: PriceHistory, config: Config = .init()) -&gt; BudgetComparison
+}
+public enum BudgetComparison: Equatable { case trend(BudgetTrend), hidden(HiddenReason) }
+public struct BudgetTrend: Equatable {
+    public enum Direction: Equatable { case same, down, up }
+    public enum Reading: Equatable { case same, down(Int), up(Int) }
+    public enum Note: Equatable {                 // tooltip sentences, in §3 order
+        case earlyRead(spanUpperPct: Int)
+        case pricesChanged(equalPrices: Reading)
+        case modelMixChanged(lastTop: String?, thisTop: String?)   // display names, only when the top model differs
+        case cacheReadShareChanged(thisPct: Int, lastPct: Int)
+        case partialCoverage(thisPct: Int, lastPct: Int)
+    }
+    public let direction: Direction
+    public let displayPct: Int      // N from reading(r) in §3; 0 for .same
+    public let approximate: Bool    // shows “~”: N &lt; 20, or an early read
+    public let emphasized: Bool     // down, 20% or more, span reaches 50%
+    public let spanUpperPct: Int    // S for the tooltip, e.g. 64
+    public let ratio: Double        // raw k_this / k_last, for logs
+    public let notes: [Note]
+}</code></pre>
+<p><code>Config.display</code> holds the §5 thresholds. <code>Config.shadow</code> differs only in G3 (20%), G4 (20 ticks), and G13 (recorded, not applied).
+The records' stored <code>cost</code> is not used. <code>prices</code> is used to rebuild cost from each record's
+token counts (§4.2), for the equal-price reading, for <code>priceChanged</code>, and for the display names in the model-mix note.
+The estimator has no I/O, clock, or global state; the price history is passed in. Every gate is unit-testable with synthetic records.</p>
+
+<h3 id="engine">6.6 <code>EngineState.swift</code> and <code>UsageEngine.swift</code></h3>
+<ul>
+  <li><code>EngineState</code> gains <code>budgetTrend: BudgetTrend?</code>, with a default value on the initializer so existing call sites
+      (<code>PopoverSampleRenderer</code>, <code>.empty</code>) keep compiling.</li>
+  <li><strong>On launch:</strong> load the current window's file (the newest file whose <code>windowStart + 7d</code> is later than now) and the
+      file for the window before it, evaluate, and include the result in the first <code>publish</code>. The line paints from disk
+      immediately, like the cached snapshot. No transcript scan is needed for this.</li>
+  <li><strong>After each successful poll:</strong> <code>publish(.ok)</code> first, unchanged, so the usage display never waits on the scan. Then:
+    <ol>
+      <li>If <code>seven_day.resets_at</code> is present, compute <code>windowStart</code>. Cross-check it against
+          <code>seven_day_breakdown.window_started_at</code>. If they differ by more than 60&nbsp;s, log one warning per window
+          (this settles CLU-3 open question 5). <strong>The <code>resets_at</code>-derived start is always the one used.</strong></li>
+      <li>If the last pricing attempt was 24 hours or more ago (or 1 hour or more after a failure), run <code>PricingFetcher</code> and update <code>PriceHistory</code> (§6.2).</li>
+      <li><code>await scanner.usage(since: windowStart, upTo: snapshot.capturedAt, prices: history)</code>.</li>
+      <li>Build the record and pass it to <code>CalibrationLog</code>.</li>
+      <li>Only if a record was written, since ticks change only on writes: re-evaluate with <code>Config.display</code> and, if the result changed, log it and publish again with the same status. Also evaluate with
+          <code>Config.shadow</code> and append to <code>readings.jsonl</code> if that reading changed.</li>
+    </ol></li>
+  <li>A failure in any of these steps (pricing fetch, scan, log I/O, decode) is logged and leaves <code>budgetTrend</code> unchanged or <code>nil</code>. It never
+      changes <code>EngineStatus</code>, the back-off, or the snapshot.</li>
+  <li>When the window key changes, the scanner resets. The new week then has no ticks, so the line disappears until it passes 30% and settles.</li>
+</ul>
+
+<h3>6.7 <code>PopoverView.swift</code> and <code>PopoverSampleRenderer.swift</code></h3>
+<ul>
+  <li><code>PopoverModel</code> gains <code>budgetLine: BudgetLine?</code> (<code>kind</code>, <code>text</code>, <code>emphasized</code>, <code>help</code>), flattened from
+      <code>state.budgetTrend</code> in the same way the other fields are flattened.</li>
+  <li>Only the Weekly row changes. Its footer becomes a <code>VStack(alignment: .leading, spacing: 5)</code> of the existing
+      <code>PaceFootnote</code> and, when present, a new <code>BudgetTrendFootnote</code>: an 11.5pt <code>HStack(spacing: 4)</code> of
+      a <code>TrendGlyph</code> and the text, <code>lineLimit(1)</code>, styled as in <a href="#copy">§3</a>, with <code>.help(help)</code>.
+      Per-model rows such as Fable never show it.</li>
+  <li><code>TrendGlyph(kind:)</code> is a new 10×10 <code>Path</code> glyph matching the existing glyphs (1.3pt stroke, round caps):
+      two bars for same, and vertical arrows for down and up.</li>
+  <li><code>--render-popover</code>: give each <code>Sample</code> an optional trend. Add <em>down 25%</em> to “Weekly ahead” (78%),
+      <em>similar</em> to “Near cap” (92%), a new “Budget up” sample at 64% with <em>up 20%</em>, and a new “Early read” sample at 38% with
+      <em>down ~15%</em> carrying the early-read and model-mix notes. Samples without a trend show the hidden state.</li>
+</ul>
+
+<h3>6.8 <code>README.md</code></h3>
+<ul>
+  <li>In the description of what the panel shows, add a sentence about the budget line and when it appears.</li>
+  <li>In <strong>How it works</strong>, add <code>PricingFetcher → PriceHistory</code> and <code>TranscriptScanner → CalibrationLog → CapEstimator</code> to the diagram.</li>
+  <li>In <strong>Privacy &amp; security</strong>, state that the app now reads Claude Code's local transcripts in <code>~/.claude/projects</code>,
+      extracts only token counts, model IDs, and timestamps, and never stores, logs, or sends prompt or response content. Also state that the
+      derived numbers live in <code>calibration/</code> under Application Support. This is a new data access and must be disclosed.</li>
+  <li>Also in <strong>Privacy &amp; security</strong>, state that once a day the app downloads Anthropic's public pricing page
+      (<code>platform.claude.com</code>). The request sends no credentials and no data. The “no third-party servers” line stays true.</li>
+</ul>
+
+<h2 id="constraints">7. Privacy and performance</h2>
+<ul>
+  <li><strong>Transcripts are sensitive.</strong> They contain full prompts and tool output. The scanner's decode types have no content
+      fields, nothing from a transcript line is logged, and the calibration record has no free-text field. <code>Log.redact</code> still applies to all log lines.</li>
+  <li><strong>Nothing about the user leaves the machine.</strong> There is one new outbound request: a daily GET of Anthropic's public pricing page,
+      with no Authorization header, no cookies, and no query parameters. The usage endpoint is still the only request that carries the token.</li>
+  <li><strong>Cost per poll:</strong> an incremental scan should finish in about <strong>100&nbsp;ms or less</strong> on this machine. A cold scan
+      of one window at launch or rollover should finish in <strong>2&nbsp;s or less</strong> (the spike's full six-week scan took 0.73&nbsp;s in Python).
+      Log the duration of cold scans and of any scan over 250&nbsp;ms. Neither may block the main actor.</li>
+  <li><strong>Memory:</strong> one dedup map for the current window, about 2–8k entries of fixed-size numbers.</li>
+</ul>
+
+<h2 id="tests">8. Tests</h2>
+<p>New files in <code>Tests/ClaudeUsageCoreTests/</code>, in the style of <code>WeeklyModelUsageTests</code>: inline JSON fixtures, with no dependence on the real <code>~/.claude</code>.</p>
+<div class="tablewrap"><table>
+  <thead><tr><th>Suite</th><th>Pins</th></tr></thead>
+  <tbody>
+    <tr><td><code>PriceHistoryTests</code></td><td>The CLU-3 §5 oracle: haiku, in 10 / out 60 / cacheRead 13,701 / cacheWrite1h 9,463 costs <strong>$0.0206061</strong> (to 1e-9).
+        Fable 5.1 cache read is $0.25. Dated IDs normalize. Lookup returns the entry in effect at <code>t</code>. A model missing from that entry uses the earliest later entry.
+        An unknown ID returns <code>nil</code>. An identical fetch appends nothing. A model missing from a fetch keeps its last rates. <code>priceChanged</code> is correct.</td></tr>
+    <tr><td><code>PricingPageParserTests</code></td><td>Fixture: the model table from the live <code>pricing.md</code> of 2026-09-24, including footnote markers, links, and the “retired” and
+        “limited availability” parentheticals. It parses to the §6.2 rates, with names mapped to IDs (<code>claude-mythos-5-1</code>, <code>claude-opus-5-5</code>, …).
+        Each of these rejects the whole fetch: a changed header, fewer than 5 rows, a malformed price, an ordering violation, and more than half the known models missing.</td></tr>
+    <tr><td><code>TranscriptScannerTests</code></td><td>Temp-dir fixtures covering: streaming rows with growing <code>output_tokens</code> (per-field max, not first-wins);
+        the same request in two files (counted once); a nested <code>subagents/</code> file (included); <code>&lt;synthetic&gt;</code> (dropped);
+        rows before the window start (excluded); a missing <code>requestId</code> (fallback key); lines appended between scans (only the new ones counted);
+        a partial trailing line (held until complete); a truncated file (re-read without double-counting); fast rows (separate key); the 5m/1h split and the fallback;
+        requests on either side of a price change priced at their own time's rates; a model priced only in a later history entry (counted as unpriced until then, if absent from all).</td></tr>
+    <tr><td><code>SevenDayBreakdownTests</code></td><td>The CLU-3 §2 payload decodes the shares and <code>window_started_at</code>. A payload without the breakdown still decodes, and the existing tests pass unchanged.</td></tr>
+    <tr><td><code>CalibrationLogTests</code></td><td>The write policy: a step writes pending plus current, a steady state writes a heartbeat every 30 minutes, a window change writes to a new file, and a shares change writes.
+        Round-trip. A corrupt line is skipped. The file name is formatted correctly.</td></tr>
+    <tr><td><code>CapEstimatorTests</code></td><td>Synthetic weeks covering:
+        <strong>readings</strong>: equal rates (<em>similar</em>); last $8 against this $6 per point (<em>down 25%</em>, emphasized); <em>up 20%</em> (not emphasized);
+        a 15% drop (<em>down ~15%</em>); a 12% drop (<em>down ~10%</em>); a 23% drop (<em>down 25%</em>); r = 0.8249 reads <em>down 20%</em> (emphasized) and r = 0.8251 reads
+        <em>down ~15%</em>: the “~” follows N, so the same number never appears both with and without it; swapping the weeks at r = 1.10 and
+        1/1.10 (both leave the “similar” band); a 25% drop with a 40% span (<em>down ~25%</em>, early read, not emphasized).
+        <strong>Estimator</strong>: a rate that triples mid-span, where the span rate must equal the true span average (OLS would not); the F4
+        counterexample (share 50% at 40, 70% at 70) giving the span's own share and not the cumulative one; head and tail block means of 5 ticks.
+        <strong>Gates</strong>: each hiding gate (G1, G3–G8, G10, G12, G13) failing on its own with the matching reason; gap ticks not counting toward G4;
+        Claude Code points in span of 14 (hidden) against 15 (shown); share of 20% (hidden); <code>xcc</code> decreasing beyond rounding (G10);
+        local $ of $24 (G10).
+        <strong>Notes</strong>: model mix (TVD 0.3, naming the top models), cache-read share 63% → 87% (note), coverage 72% (shown, with note).
+        <strong>Stability replica</strong>: a week built from the §5 replay's band rates ($0, 0, 7.9, 11.8, 19.2, 4.6, 0.4, 2.0 per point) against an
+        even last week reproduces the replay table: hidden at 30%, 40%, and 50%, shown at 60%.
+        <strong>Repricing</strong>: a model absent from the history until a later entry is back-priced in every record at once and G7 clears; a price
+        change detected mid-week reprices only the later increments; two writers' interleaved records are evaluated from one writer.
+        <code>Config.shadow</code> produces a reading at a 22% span that <code>Config.display</code> hides;
+        a multi-point step (interpolated <code>y</code>, flagged as gap ticks); a utilization dip (no ticks emitted); a matched span that truncates to the shorter week.
+        <strong>The owner's example:</strong> Opus's list price drops 20% between the weeks, and the plan's dollars per point drop 20% with it, so tokens per point
+        are unchanged. The result must read <em>down 20%</em>, with the notes “with the same prices in both weeks this would read ‘similar’” and “roughly a wash”.
+        <strong>The inverse:</strong> the price drops 20% but the plan's dollars per point hold, so you get 25% more tokens per point. The result reads <em>similar</em>,
+        with the note that at equal prices it would read “up 25%”. Also: no price change (no note), and stale prices under G12 (hidden).</td></tr>
+  </tbody>
+</table></div>
+<p>Visual QA: <code>.build/debug/ClaudeUsageApp --render-popover &lt;dir&gt;</code> shows the three line states and the hidden state, each on one line.</p>
+
+<h2 id="acceptance">9. Acceptance criteria</h2>
+<ul class="checks">
+  <li><b class="id">AC1</b>When no hiding gate in §5 fails, the Weekly row shows exactly one line, below the pace and reset footnote, with the §3 copy, “~” and emphasis rules, glyph, and tooltip notes.</li>
+  <li><b class="id">AC2</b>When a hiding gate fails, the Weekly row renders exactly as it does today, with no placeholder, spacing change, or “not enough data” text.
+      A model-mix change, a cache-read share change, or partial coverage above 25% adds a tooltip note and never hides the line.</li>
+  <li><b class="id">AC3</b>Per-model weekly rows (such as Fable) and the Session row never show the line.</li>
+  <li><b class="id">AC4</b>The week boundary is <code>seven_day.resets_at − 7d</code> from the OAuth usage endpoint, and “last week” is the window that reset into the current one.
+      A disagreement with <code>window_started_at</code> is logged and does not change the boundary.</li>
+  <li><b class="id">AC5</b>The comparison uses the block-mean span rate against Claude Code points over matched spans (§4.4), with cost rebuilt from
+      each record's token counts at the list price in effect at that record's time (§4.2).
+      When prices changed between the weeks and the constant-price reading differs, the tooltip says so (§3).</li>
+  <li><b class="id">AC6</b>After a relaunch, the line appears on first paint from the calibration files, without waiting for a poll.</li>
+  <li><b class="id">AC7</b>No transcript content is persisted or logged. Every calibration field is a number, model ID, surface key, or timestamp.</li>
+  <li><b class="id">AC8</b>A missing or unreadable <code>~/.claude/projects</code>, or a missing <code>seven_day_breakdown</code>, hides the line and logs once. Usage display, status, and polling are unaffected.</li>
+  <li><b class="id">AC9</b>Scanning never runs on the main actor, and it meets the §7 timing on this machine (checked from the log).</li>
+  <li><b class="id">AC10</b>Changes in the trend or hidden reason are logged once each, with k, span, coverage, tick counts, the price entry used, and the constant-price reading.</li>
+  <li><b class="id">AC11</b><code>swift build</code> and <code>swift test</code> pass, including the §8 suites.</li>
+  <li><b class="id">AC12</b>The README describes the line and discloses both the transcript access and the daily pricing-page fetch (§6.8).</li>
+  <li><b class="id">AC13</b>Prices update without a code change. Within 24 hours of a successful poll, a new model or price on Anthropic's pricing page becomes a new
+      dated entry in <code>pricing/history.jsonl</code>. A page that fails validation changes nothing, is logged, and after 7 days hides the line (G12).
+      The pricing request never carries the OAuth token.</li>
+  <li><b class="id">AC14</b>Shadow readings are appended to <code>calibration/readings.jsonl</code> from a 20% span, whether or not the line is shown, with the fields in §6.4.</li>
+  <li><b class="id">AC15</b>The stability replica in §8 reproduces the §5 replay table exactly (hidden at 30%, 40%, and 50%; shown at 60%).</li>
+</ul>
+
+<h2 id="scope">10. Out of scope</h2>
+<ul>
+  <li><strong>An absolute dollar value for the limit</strong> (“this week's limit is worth ≈ $850 of API usage”). This is the first half of the owner's question,
+      “how much subsidized usage am I getting?”. The estimate is biased below about 70% utilization (CLU-3 §11), so it needs its own, stricter gate.
+      It is a natural follow-up ticket, and nothing here blocks it: the calibration records already hold everything it needs.</li>
+  <li><strong>Backfill</strong> from <code>claude-usage.log</code> (decision in §2).</li>
+  <li><strong>Session-window estimates.</strong> The 5-hour window is too small and lags too much to divide by (CLU-3 §8).</li>
+  <li><strong>Decoding <code>extra_usage</code>, <code>limit_dollars</code>, and <code>used_dollars</code>.</strong> A matched span stops at or below 99.5%, so spend beyond the limit
+      never enters a tick, and the “exclude maxed-out windows” rule applies only to absolute estimates. Candidate follow-up.</li>
+  <li><strong>Per-model weighting fits</strong>, testing how cache reads are weighted, and OpenTelemetry ingestion. The calibration log keeps the data these would need.
+      If shadow readings confirm that the plan discounts cache reads (§11), changing the headline to weight them differently is its own follow-up.</li>
+  <li><strong>Price modifiers</strong> from other sections of the pricing page (batch, long context, data residency). Claude Code's plan traffic is standard
+      interactive traffic, which matched the §5 oracle exactly.</li>
+  <li><strong>A setting to hide the line</strong>, and any icon change.</li>
+</ul>
+
+<h2 id="risks">11. Risks and tunables</h2>
+<div class="callout warn">
+  <span class="lbl">Watch these</span>
+  <ul style="margin:0">
+    <li><strong>Uneven weeks mislead early readings.</strong> A reading's random error is a few percent; its systematic error comes from how the
+        week's work is spread across the span, and in the one real week that exceeded 100% at a 30% span. G13 keeps the worst of it off the screen
+        but not all of it: the <a href="#gates">§5 replay</a> would have shown “up 25%” on a Tuesday for a week that ended “similar”. How often this
+        happens across ordinary weeks isn't known; the shadow readings measure it.</li>
+    <li><strong>The plan may not count cache reads at list price.</strong> In the week of 2026-09-18, local cost per point from non-cache-read tokens
+        was flat across 10-point bands ($2.08, 2.50, 2.37, 2.70), while cost per point from cache reads swung from $2.5 to $17.7. A fit of
+        points against both gave cache reads about 0.09 of the weight of other dollars. If that holds, the headline moves with the share of cache
+        reads in a week's work: going from 63% to 87%, the shares of two weeks in the spike, would read about “up 105%” with no change to the plan.
+        This is one week and is confounded by off-Mac usage, so it is suggestive, not proven. The cache-read note (§3) flags it, and
+        <code>ratioNonRead</code> in shadow readings lets a follow-up decide whether the headline should weight cache reads differently.</li>
+    <li><strong>Claude Code on the web is invisible here, and appears to be counted as Claude Code.</strong> In the week of 2026-09-18, the first
+        20 points came with $0.07 of local spend, yet the endpoint later reported 94% Claude Code at 48%. At most about 3 of those 48 points were
+        other surfaces, so at least about 17 points of “Claude Code” usage never reached this Mac, which is consistent with web sessions being folded
+        into <code>claude_code</code>. The §6.1 check should confirm it. When that happens, moving work between web and this Mac shifts a full-span
+        reading by about the same proportion, and an early reading by up to the whole span, since in that week 20 of the first 30 points were off
+        this Mac. Running sessions in the CLI, VS Code, or the Desktop app, which all write local transcripts, keeps the measurement honest.</li>
+    <li><strong>Thresholds rest on one validated pair.</strong> The matched-span method agreed to 0.4% once, at a 47.5% span; re-deriving the same
+        pair gave $7.73 against the spike's $7.99, a 3% difference from tick-counting convention alone. The display thresholds are provisional.
+        Revisit them after about four weeks of shadow readings (<a href="#readings">§6.4</a>).</li>
+    <li><strong>Switching models moves the number.</strong> Opus 5 → Opus 5.5 is happening on this machine now. The line shows it with a model-mix note rather than
+        hiding, so a “down ~15%” during a switch may come from the switch, not the plan.</li>
+    <li><strong>Price changes register late.</strong> A change takes effect in the history when the daily fetch first sees it, up to about 24 hours after the
+        real change. With spend spread evenly, a missed day of a 20% change skews a week by about 3%. Spend is rarely even: in the week of 2026-09-18,
+        71% of local spend fell on one day, and a 20% change detected a day late on that day would skew the week by about 14%, into the “~15%”
+        range. The price note (§3) fires whenever a change was detected inside either window, so such a reading is never unexplained.</li>
+    <li><strong>The pricing page is a docs page, not an API.</strong> A layout change breaks the parser. The whole fetch is rejected, the last good table is kept,
+        the log says why, and G12 hides the line after 7 days, so a silently wrong subsidy is never shown.</li>
+    <li><strong>Fast-mode plan accounting is unknown.</strong> G8 covers it.</li>
+    <li><strong>Undocumented surfaces.</strong> The breakdown can disappear (G6 hides the line) and the transcript format can drift (the scanner tests and G10's sanity checks catch it).</li>
+    <li><strong>Other invisible usage</strong> (Cowork, chat, another Mac) is corrected for only through the endpoint's share. Between 25% and 90% the line shows with a note; below 25% it hides.</li>
+  </ul>
+</div>
+
+<h2 id="rollout">12. When the line first appears</h2>
+<p>Recording starts on first launch of the build that includes this feature. With G2 removed, a partly recorded first week can serve as
+“last week”, provided the next week overlaps it by at least 30 points (G4). If the build ships before the 2026-09-25 reset, that week is
+recorded in full, and the line can first appear in the week starting 2026-10-02, once it passes 30% and its reading has settled (G13).
+Replaying the week of 2026-09-18, that would have been around Tuesday. If the build ships mid-week, the first comparison may take one extra week. Shadow readings start on day one either way.
+Until the line appears, the panel looks exactly as it does today.</p>
+
+<h2 id="review">13. Adversarial review</h2>
+<p>On 2026-09-24 an independent reviewer (Claude Fable 5.1) attacked the spec's math and statistics. It reproduced the local cost pipeline to the
+cent ($396.47 at 2026-09-21T17:34Z) and replayed the week of 2026-09-18 from the widget's log and transcripts. Findings and where each was addressed:</p>
+<div class="tablewrap"><table>
+  <thead><tr><th>#</th><th>Severity</th><th>Finding</th><th>Resolution</th></tr></thead>
+  <tbody>
+    <tr><td>F1</td><td>blocker</td><td>R² ≥ 0.90 on a cumulative series hides real weeks (the one real week never passed) and passes broken ones.</td><td>G10 redefined as sanity checks (§5).</td></tr>
+    <tr><td>F2</td><td>blocker</td><td>The OLS slope weights the middle of the span, so it doesn't measure “the first S%”. Early readings carry large bias with no fixed sign, which matched spans cancel only for similar weeks.</td><td>Block-mean span rate (§4.4); stability gate G13 (§5); an honest replay of the one real week (§5, §11).</td></tr>
+    <tr><td>F3</td><td>major</td><td>The plan appears to count cache reads far below list price, which moves the headline with the kind of work.</td><td>Cache-read note (§3), <code>readShare</code> and <code>ratioNonRead</code> in shadow readings (§6.4), a risk (§11), and a follow-up (§10).</td></tr>
+    <tr><td>F4</td><td>major</td><td>A cumulative share at <code>hi</code> is the wrong divisor once the span starts above 0 or the share drifts.</td><td>Rate measured against Claude Code points, <code>xcc</code> (§4.3–4.4); G6 points floor.</td></tr>
+    <tr><td>F5</td><td>major</td><td>Cost frozen per record steps <code>y</code> when a model is priced late, and G7 then hides the week for good.</td><td>Cost rebuilt from token deltas at evaluation (§4.2); G7 checked at evaluation; a <code>writer</code> field.</td></tr>
+    <tr><td>F6</td><td>major</td><td>The “±9%” and “a quarter of weeks” claims came from an OLS error the spike says not to trust (lag-1 autocorrelation 0.99).</td><td>Claims replaced with the measured random error and the systematic-error caveat (§2, §4.4); G4 reworded as a span floor.</td></tr>
+    <tr><td>F7</td><td>major</td><td>Shadow readings lacked the fields needed to tune thresholds, and cannot tune the “similar” band at all.</td><td>Fields added, and the limit stated (§6.4).</td></tr>
+    <tr><td>F8</td><td>minor</td><td>“About the same as last week” is 248.4pt against 248pt available.</td><td>Now “similar to last week” at 198pt (§3).</td></tr>
+    <tr><td>F9</td><td>minor</td><td>The “about 3%” late-price skew assumed even spend; one real day held 71%.</td><td>Reworded (§11).</td></tr>
+    <tr><td>F10</td><td>minor</td><td>The “~” and N could disagree near 20%; Δ bands were asymmetric.</td><td>One <code>reading(r)</code> function banding on |ln r| (§3).</td></tr>
+    <tr><td>F11</td><td>minor</td><td>Stale statements: the 50% rollover text, the web-shift claim for early reads, G10 at low shares, the heartbeat interval, and the log size.</td><td>Corrected (§2, §6.4, §6.6, §11).</td></tr>
+    <tr><td>F12</td><td>minor</td><td>Interpolated gap ticks carry no information but counted toward G4.</td><td>G4 counts only non-gap ticks (§4.3, §5).</td></tr>
+  </tbody>
+</table></div>
+<p>One claim from the review was corrected here. The review estimated that G13 would have shown the one real week from about 60–70%, with the
+reading by then close to final. Replaying with the block-mean estimator shows the reading was stable at 60% but still 27% away from final
+(the §5 replay). The table and the risk in §11 reflect the corrected result.</p>
+
+<hr class="end">
+<footer>
+  CLU-4 refinement · spec only. Implementation lands in a follow-up PR. Figures and rates are as of 2026-09-24, and the usage endpoint is
+  undocumented, the same caveat the README carries for the rest of this project.
+</footer>
+
+</div>
+</body>
+</html>
