@@ -85,3 +85,79 @@ session expired and could not be refreshed` directly, no manual reproduction nee
 - Validated the message text against a live failure (`claude -p ping` run by hand above);
   have not yet observed the *app* log the new stderr line, since that needs a fresh
   failure — the immediate fix for the reported issue is running `claude /login`.
+
+---
+
+## Attempt 2 — 2026-09-25: it wasn't a "genuine" expiry; the widget killed its own refresh across sleep
+
+### Symptom
+
+Widget (run from `/Applications`) showed *"Couldn't refresh login — open Claude Code"*
+the day after the CLU-4 merge. The merge was a red herring: it doesn't touch auth, and
+the app had polled fine for ~14h after it was installed.
+
+### What the evidence showed
+
+The `Claude Code-credentials` Keychain item had been blanked — `accessToken` and
+`refreshToken` both empty, `expiresAt: 0` (the "expiry ≈ 1970" signature from attempt 1),
+item `mdat` `2026-09-25T16:24:15Z`. Cross-referencing the app log with `pmset -g log`
+(lid closed, laptop cycling through short DarkWake maintenance windows):
+
+| UTC | Event |
+|---|---|
+| 14:33:46 | 6s DarkWake. Regular poll: token expires in 24min → CLI ping spawned. Machine re-slept ~6s later **with the ping mid-flight**. |
+| 16:02:12 | Next DarkWake. The ping watchdog's deadline was wall-clock (`Date()`), so the 88min of sleep counted and it **SIGTERMed the ping immediately** (exit 143, "5306.2s"). |
+| 16:12:04 | 17s DarkWake. Token now −73min → second ping. Machine slept again mid-ping. |
+| 16:24:14 | DarkWake → watchdog killed ping #2 on the spot. |
+| 16:24:15 | Keychain item rewritten with empty tokens. |
+
+`~/.claude/history.jsonl` shows no interactive Claude Code use 13:00–18:00Z, so the
+widget's pings were the only actor. Most likely mechanism (consistent with all of the
+above, not provable from outside): ping #1 sent the refresh request, the server rotated
+the refresh token (invalidating the old one), and the process was frozen/killed before
+the CLI persisted the new one. Ping #2 then presented the dead refresh token, was
+rejected, and the CLI cleared the credentials. Attempt 1's incident has the same shape
+(`mdat` seconds after a failed ping), so it was probably this bug too rather than a
+coincidental server-side expiry.
+
+### Root cause
+
+Two widget behaviours combined:
+
+1. **Polling (and pinging) during DarkWake.** The poll timer fires whenever the process
+   is resumed, including multi-second maintenance wakes where the machine re-sleeps
+   almost immediately — the worst possible time to start a token rotation.
+2. **Wall-clock ping timeout.** Sleep time counted toward the 30s deadline, so a ping
+   that straddled sleep was killed the instant the machine woke — exactly when its
+   network request could finally complete and the new token be saved.
+
+### Change
+
+- `UsageEngine`: track system sleep with `NSWorkspace.willSleepNotification` →
+  `systemAsleep = true`, cleared by `didWakeNotification` (plus `screensDidWake` as a
+  backstop). DarkWake never posts `didWake`, so `pollOnce` returns early (no failure, no
+  back-off) for the whole lid-closed period. The existing full-wake observer polls
+  immediately when the user comes back. Also covers the network-reconnect trigger, which
+  fired during DarkWake at 16:12:09.
+- `TokenRefresher.spawnPing`: deadline measured on `ProcessInfo.systemUptime` (stops
+  during sleep), so a ping gets 30 *awake* seconds and resumes/finishes after a sleep
+  instead of being killed on wake. The log line now shows both clocks when they diverge
+  (`… after 3.1s awake (5306s wall — system slept)`).
+- `TokenRefresher.spawnPing`: wraps the ping in a `ProcessInfo` activity with
+  `.idleSystemSleepDisabled`, so idle sleep can't interrupt a rotation in progress. (A lid
+  close still forces sleep; the awake-time deadline covers that case.)
+
+### Why it should help
+
+A ping can no longer start in a window where the machine is about to re-sleep, and a
+ping interrupted by a forced sleep is allowed to finish instead of being SIGTERMed right
+as it resumes. Both paths that could strand a rotated refresh token are closed.
+
+### Build / status
+
+- `swift build` → Build complete; `swift test` → 92 tests, 0 failures.
+- Rebuilt and installed `/Applications/Claude Usage.app`; after the user's `claude /login`
+  the widget polls normally (HTTP 200 at 18:22:52Z).
+- Not yet observed: a lid-closed night with the new build. Things to check in the log:
+  `System going to sleep — pausing polls`, `skipping poll until full wake` during
+  DarkWakes, and no `CLI ping` lines between them.

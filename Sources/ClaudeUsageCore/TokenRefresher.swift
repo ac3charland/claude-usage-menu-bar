@@ -4,7 +4,10 @@ public enum TokenRefresher {
     /// Refresh margin: if expiresAt is within this many minutes of now, trigger a refresh.
     public static let refreshMarginMinutes: TimeInterval = 30
 
-    /// Hard timeout for the `claude` ping subprocess.
+    /// Hard timeout for the `claude` ping subprocess, in *awake* seconds: measured on
+    /// `systemUptime`, which stops while the Mac sleeps. A wall-clock deadline expired
+    /// during sleep and killed the ping the instant the machine woke — possibly right as a
+    /// rotated refresh token was about to be saved (docs/fixes/oauth-session-expired.md).
     public static let cliTimeoutSeconds: TimeInterval = 30
 
     /// Minimum spacing between CLI ping attempts for the *same* unrefreshed token.
@@ -74,7 +77,16 @@ public enum TokenRefresher {
         let stderrPipe = Pipe()
         proc.standardError = stderrPipe
 
+        // Keep the Mac from idle-sleeping mid-ping, so the CLI can finish a token rotation
+        // and save the result. (Lid close still forces sleep; the awake-time deadline below
+        // then lets the ping resume and finish instead of killing it on wake.)
+        let activity = ProcessInfo.processInfo.beginActivity(
+            options: [.idleSystemSleepDisabled, .suddenTerminationDisabled],
+            reason: "Refreshing Claude Code login")
+        defer { ProcessInfo.processInfo.endActivity(activity) }
+
         let started = Date()
+        let startedUptime = ProcessInfo.processInfo.systemUptime
         do {
             try proc.run()
         } catch {
@@ -82,20 +94,24 @@ public enum TokenRefresher {
             return
         }
 
-        let deadline = started.addingTimeInterval(cliTimeoutSeconds)
-        while proc.isRunning && Date() < deadline {
+        let deadlineUptime = startedUptime + cliTimeoutSeconds
+        while proc.isRunning && ProcessInfo.processInfo.systemUptime < deadlineUptime {
             try? await Task.sleep(nanoseconds: 100_000_000)
         }
         if proc.isRunning {
-            Log.warn("CLI ping exceeded \(Int(cliTimeoutSeconds))s — terminating")
+            Log.warn("CLI ping exceeded \(Int(cliTimeoutSeconds))s awake — terminating")
             proc.terminate()
             try? await Task.sleep(nanoseconds: 500_000_000)
             if proc.isRunning { proc.interrupt() }
         }
-        let elapsed = Date().timeIntervalSince(started)
+        let awake = ProcessInfo.processInfo.systemUptime - startedUptime
+        let wall = Date().timeIntervalSince(started)
+        // Report both clocks when they diverge, so a ping that straddled sleep is obvious.
+        var elapsedText = String(format: "%.1fs", awake)
+        if wall - awake > 5 { elapsedText += String(format: " awake (%.0fs wall — system slept)", wall) }
         let code = proc.terminationStatus
         if code == 0 {
-            Log.info("CLI ping exited code=0 after \(String(format: "%.1f", elapsed))s")
+            Log.info("CLI ping exited code=0 after \(elapsedText)")
         } else {
             // Most common causes in practice: the keychain entry has an empty refreshToken,
             // or the refresh token itself was rejected server-side (session revoked/expired —
@@ -106,7 +122,7 @@ public enum TokenRefresher {
             let stderrText = String(data: stderrPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             let detail = (stderrText?.isEmpty == false) ? " — \(stderrText!)" : ""
-            Log.warn("CLI ping exited code=\(code) after \(String(format: "%.1f", elapsed))s — token likely not refreshed\(detail)")
+            Log.warn("CLI ping exited code=\(code) after \(elapsedText) — token likely not refreshed\(detail)")
         }
     }
 
