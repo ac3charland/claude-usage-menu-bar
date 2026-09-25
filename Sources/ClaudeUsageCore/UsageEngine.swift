@@ -52,7 +52,15 @@ public final class UsageEngine {
     /// Called on the main actor whenever `state` changes.
     public var onState: ((EngineState) -> Void)?
 
-    public init() {}
+    /// CLU-4: the weekly budget-vs-last-week pipeline. Runs after each successful poll and
+    /// never affects status, back-off, or the snapshot.
+    private let budget: BudgetTracker
+    private var budgetTrend: BudgetTrend?
+
+    /// `writer` tags this process's calibration records ("app" or "daemon", §4.2 of CLU-4).
+    public init(writer: String = "app") {
+        budget = BudgetTracker(writer: writer)
+    }
 
     deinit {
         if let token = wakeObserverToken {
@@ -66,6 +74,9 @@ public final class UsageEngine {
     }
 
     public func run() async {
+        // Paint the budget line from the calibration files immediately, like the cached snapshot.
+        budgetTrend = budget.loadInitial()
+
         if let cached = SnapshotCache.load() {
             Log.info("Loaded cached snapshot (capturedAt=\(cached.capturedAt)): \(cached.shortDescription)")
             lastSnapshot = cached
@@ -174,6 +185,13 @@ public final class UsageEngine {
             rateLimitedUntil = nil
             suppressPromptUntil = nil
             publish(.ok)
+
+            // Budget tracking runs after the usage display is already updated, so the panel
+            // never waits on a transcript scan. A change in the trend re-publishes, same status.
+            if await budget.afterPoll(response: response, snapshot: snapshot) {
+                budgetTrend = budget.trend
+                publish(.ok)
+            }
         } catch UsageFetchError.rateLimited {
             failures += 1
             last429 = true
@@ -231,7 +249,8 @@ public final class UsageEngine {
 
     /// Builds an `EngineState` from the retained last-good snapshot and publishes it.
     private func publish(_ status: EngineStatus) {
-        let newState = EngineState(snapshot: lastSnapshot, status: status, lastSuccess: lastSuccess)
+        let newState = EngineState(snapshot: lastSnapshot, status: status, lastSuccess: lastSuccess,
+                                   budgetTrend: budgetTrend)
         state = newState
         onState?(newState)
     }

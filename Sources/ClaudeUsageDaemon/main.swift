@@ -7,7 +7,7 @@ struct ClaudeUsageDaemon {
         Log.info("ClaudeUsageDaemon starting (pid=\(ProcessInfo.processInfo.processIdentifier))")
         Log.info("Cache file: \(SnapshotCache.fileURL.path)")
 
-        let engine = UsageEngine()
+        let engine = UsageEngine(writer: "daemon")
         await engine.run()
     }
 }

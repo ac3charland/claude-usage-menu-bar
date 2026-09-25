@@ -10,6 +10,7 @@ struct PopoverModel: Equatable {
     var weeklyResetsAt: Date?
     var weeklyElapsed: Double
     var weeklyAhead: Bool
+    var budgetLine: BudgetLine?
     var reason: String?
 
     /// A per-model weekly row, flattened out of the snapshot so SwiftUI stays decoupled from
@@ -20,6 +21,27 @@ struct PopoverModel: Equatable {
         var resetsAt: Date?
         var elapsed: Double
         var ahead: Bool
+    }
+
+    /// The CLU-4 footnote under the Weekly bar, flattened from `EngineState.budgetTrend`.
+    /// `nil` when a hiding gate fails, so the row renders exactly as it did before.
+    struct BudgetLine: Equatable {
+        enum Kind { case same, down, up }
+        var kind: Kind
+        var text: String
+        var emphasized: Bool
+        var help: String
+
+        init(_ t: BudgetTrend) {
+            switch t.direction {
+            case .same: kind = .same
+            case .down: kind = .down
+            case .up: kind = .up
+            }
+            text = t.lineText
+            emphasized = t.emphasized
+            help = t.helpText
+        }
     }
 
     init(_ state: EngineState) {
@@ -33,6 +55,7 @@ struct PopoverModel: Equatable {
         weeklyResetsAt = state.snapshot?.weekly?.resetsAt
         weeklyElapsed = state.snapshot?.weekly?.elapsedFraction ?? 0
         weeklyAhead = state.snapshot?.weekly?.isAhead ?? false
+        budgetLine = state.budgetTrend.map(BudgetLine.init)
         reason = state.status.reason
     }
 
@@ -87,13 +110,21 @@ struct PopoverView: View {
             sectionDivider
         }
 
-        // Weekly — solid when on pace, hollow when ahead; pace mark at elapsed fraction.
+        // Weekly — solid when on pace, hollow when ahead; pace mark at elapsed fraction. Only
+        // this row carries the budget-vs-last-week line (CLU-4); per-model rows never do.
         ProgressRow(
             label: "Weekly",
             pct: (model.weeklyPct ?? 0) / 100,
             ahead: model.weeklyAhead,
             paceMark: model.weeklyElapsed,
-            footer: { PaceFootnote(ahead: model.weeklyAhead, resetsAt: model.weeklyResetsAt) }
+            footer: {
+                VStack(alignment: .leading, spacing: 5) {
+                    PaceFootnote(ahead: model.weeklyAhead, resetsAt: model.weeklyResetsAt)
+                    if let line = model.budgetLine {
+                        BudgetTrendFootnote(line: line)
+                    }
+                }
+            }
         )
 
         if let reason = model.reason {
@@ -265,7 +296,57 @@ private struct PaceFootnote: View {
     }
 }
 
+/// "Usage budget down 25% from last week" — one line, glyph + text, with the §3 styling:
+/// emphasized (white, medium) only for a clear drop; everything else white 55%, regular.
+private struct BudgetTrendFootnote: View {
+    let line: PopoverModel.BudgetLine
+    var body: some View {
+        HStack(spacing: 4) {
+            TrendGlyph(kind: line.kind, opacity: line.emphasized ? 1 : 0.55)
+            Text(line.text)
+        }
+        .font(.system(size: 11.5))
+        .foregroundColor(line.emphasized ? .white : .white.opacity(0.55))
+        .fontWeight(line.emphasized ? .medium : .regular)
+        .lineLimit(1)
+        .help(line.help)
+    }
+}
+
 // MARK: - Glyphs (transcribed from popover.jsx SVGs)
+
+/// 10×10 trend glyph matching the footnote glyphs (1.3pt stroke, round caps): two short bars
+/// for "same", straight vertical arrows for down and up. Vertical, not the diagonal pace
+/// arrow, so "budget up" is never confused with "ahead of pace".
+private struct TrendGlyph: View {
+    let kind: PopoverModel.BudgetLine.Kind
+    let opacity: Double
+    var body: some View {
+        Path { p in
+            switch kind {
+            case .same:
+                p.move(to: CGPoint(x: 2, y: 3.5))
+                p.addLine(to: CGPoint(x: 8, y: 3.5))
+                p.move(to: CGPoint(x: 2, y: 6.5))
+                p.addLine(to: CGPoint(x: 8, y: 6.5))
+            case .down:
+                p.move(to: CGPoint(x: 5, y: 1.5))
+                p.addLine(to: CGPoint(x: 5, y: 8.5))
+                p.move(to: CGPoint(x: 2.2, y: 5.7))
+                p.addLine(to: CGPoint(x: 5, y: 8.5))
+                p.addLine(to: CGPoint(x: 7.8, y: 5.7))
+            case .up:
+                p.move(to: CGPoint(x: 5, y: 8.5))
+                p.addLine(to: CGPoint(x: 5, y: 1.5))
+                p.move(to: CGPoint(x: 2.2, y: 4.3))
+                p.addLine(to: CGPoint(x: 5, y: 1.5))
+                p.addLine(to: CGPoint(x: 7.8, y: 4.3))
+            }
+        }
+        .stroke(Color.white.opacity(opacity), style: StrokeStyle(lineWidth: 1.3, lineCap: .round, lineJoin: .round))
+        .frame(width: 10, height: 10)
+    }
+}
 
 private struct ClockGlyph: View {
     var body: some View {

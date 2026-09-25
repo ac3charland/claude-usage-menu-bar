@@ -36,14 +36,54 @@ public struct UsageLimit: Decodable {
     }
 }
 
+/// The weekly window's per-surface split (`seven_day_breakdown`): which fraction of the week's
+/// usage came from Claude Code, Cowork, chat, or elsewhere. Every field is optional so a payload
+/// without it still decodes. Only what CLU-4 needs is decoded here.
+public struct SevenDayBreakdown: Decodable {
+    public let windowStartedAt: Date?
+    public let rows: [Row]?
+
+    public struct Row: Decodable {
+        public let key: String?
+        public let displayName: String?
+        public let percent: Double?
+        enum CodingKeys: String, CodingKey {
+            case key, percent
+            case displayName = "display_name"
+        }
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case windowStartedAt = "window_started_at"
+        case rows
+    }
+
+    /// Percent per surface, keyed by `row.key` (e.g. `claude_code`, `cowork`, `chat`, `other`).
+    public var surfaceShares: [String: Double] {
+        var out: [String: Double] = [:]
+        for r in rows ?? [] {
+            if let k = r.key, let p = r.percent { out[k] = p }
+        }
+        return out
+    }
+}
+
 public struct UsageResponse: Decodable {
     public let fiveHour: UsageWindow?
     public let sevenDay: UsageWindow?
     public let limits: [UsageLimit]?
+    public let sevenDayBreakdown: SevenDayBreakdown?
     enum CodingKeys: String, CodingKey {
         case fiveHour = "five_hour"
         case sevenDay = "seven_day"
         case limits
+        case sevenDayBreakdown = "seven_day_breakdown"
+    }
+
+    /// Percent per surface from the breakdown; `nil` when the payload has no breakdown.
+    public var surfaceShares: [String: Double]? {
+        guard let b = sevenDayBreakdown, b.rows != nil else { return nil }
+        return b.surfaceShares
     }
 
     /// The per-model weekly caps the endpoint reports as `weekly_scoped` entries in `limits`,

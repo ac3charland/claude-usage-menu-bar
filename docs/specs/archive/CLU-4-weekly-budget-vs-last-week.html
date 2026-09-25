@@ -134,7 +134,7 @@
   same in API dollars as last week, or noticeably more or less. In other words: is the subsidy changing?
   Show it only when the data supports the claim.</p>
   <p class="meta">
-    <b>Status</b> refinement · spec only, no app or source changes<br>
+    <b>Status</b> implemented · archived; this spec is consumed<br>
     <b>Date</b> 2026-09-24 · <b>Builds on</b> <a href="../spikes/CLU-3-effective-usage-from-token-counts/findings.html">CLU-3 spike findings</a> (§8, §11)<br>
     <b>Branch</b> spec/clu-4-weekly-budget-vs-last-week
   </p>
@@ -503,6 +503,10 @@ Local transcripts only cover the <code>cli</code>, <code>sdk-cli</code>, <code>c
 sessions run in the cloud and leave nothing on this Mac. If the breakdown gives web sessions their own row, subtract it and use the local-only share
 as <code>cov</code>. If web sessions are folded into <code>claude_code</code>, keep the formula but record that finding in this spec, because
 <code>cov</code> then overstates what is local (<a href="#risks">§11</a>).</p>
+<p><strong>Finding (implementation, 2026-09-24):</strong> a live <code>seven_day_breakdown</code> captured at 83% of the week starting
+2026-09-18 had exactly four rows, <code>claude_code</code> 91%, <code>chat</code> 0%, <code>cowork</code> 9%, <code>other</code> 0%, and no row for
+web sessions. Web sessions are therefore folded into <code>claude_code</code> (or absent), so the formula is kept as written and
+<code>cov</code> overstates what is local by whatever share ran on the web. The risk in <a href="#risks">§11</a> stands.</p>
 
 <h3 id="pricing">6.2 <code>PriceHistory.swift</code> and <code>PricingFetcher.swift</code> (new, Core)</h3>
 <p>This is a dated history of list-price tables. It answers “what did model <em>m</em> cost at time <em>t</em>?”
@@ -897,7 +901,7 @@ reading by then close to final. Replaying with the block-mean estimator shows th
 
 <hr class="end">
 <footer>
-  CLU-4 refinement · spec only. Implementation lands in a follow-up PR. Figures and rates are as of 2026-09-24, and the usage endpoint is
+  CLU-4 · implemented and archived (see the §6.1 finding). Originally: refinement, spec only. Figures and rates are as of 2026-09-24, and the usage endpoint is
   undocumented, the same caveat the README carries for the rest of this project.
 </footer>
 
