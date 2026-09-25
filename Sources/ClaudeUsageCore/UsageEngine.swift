@@ -19,7 +19,15 @@ public final class UsageEngine {
     private var last429 = false
     private var rateLimitedUntil: Date?
     private var sleepTask: Task<Void, Never>?
-    private var wakeObserverToken: NSObjectProtocol?
+    private var powerObserverTokens: [NSObjectProtocol] = []
+    /// True between a system-sleep notification and the next *full* wake. macOS keeps
+    /// resuming us for a few seconds at a time during lid-closed "DarkWake" maintenance
+    /// windows without ever posting `didWakeNotification`, so this stays true through them.
+    /// Polling (and above all the CLI refresh ping) must not run there: the machine
+    /// re-sleeps mid-ping, and a ping frozen after the server rotated the refresh token but
+    /// before the CLI saved the new one leaves the login unrecoverable (see
+    /// docs/fixes/oauth-session-expired.md, attempt 2).
+    private var systemAsleep = false
     #if canImport(Network)
     private var pathMonitor: NWPathMonitor?
     /// Last observed reachability, so we only react to a real offline→online edge
@@ -63,11 +71,11 @@ public final class UsageEngine {
     }
 
     deinit {
-        if let token = wakeObserverToken {
-            #if canImport(AppKit)
+        #if canImport(AppKit)
+        for token in powerObserverTokens {
             NSWorkspace.shared.notificationCenter.removeObserver(token)
-            #endif
         }
+        #endif
         #if canImport(Network)
         pathMonitor?.cancel()
         #endif
@@ -109,6 +117,12 @@ public final class UsageEngine {
     }
 
     private func pollOnce() async {
+        // DarkWake: the lid is closed and nobody can see the panel. Skip entirely (not a
+        // failure, so no back-off); the full-wake observer triggers a poll when the user is back.
+        if systemAsleep {
+            Log.info("System asleep (dark wake) — skipping poll until full wake")
+            return
+        }
         // When access has lapsed (the `claude` CLI recreates its Keychain item on each token
         // refresh, which wipes our ACL grant), the widget asks for the login password right
         // then — no deferred "right-click to authorize" step. We only fall back to a silent
@@ -288,17 +302,37 @@ public final class UsageEngine {
 
     private func startWakeObserver() {
         #if canImport(AppKit)
-        wakeObserverToken = NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.didWakeNotification,
-            object: nil,
-            queue: .main
+        let center = NSWorkspace.shared.notificationCenter
+        // Notifications fire on the main queue; we're already main-isolated.
+        powerObserverTokens.append(center.addObserver(
+            forName: NSWorkspace.willSleepNotification, object: nil, queue: .main
         ) { [weak self] _ in
-            // The notification fires on the main queue; we're already main-isolated.
+            MainActor.assumeIsolated {
+                Log.info("System going to sleep — pausing polls until full wake")
+                self?.systemAsleep = true
+            }
+        })
+        powerObserverTokens.append(center.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
             MainActor.assumeIsolated {
                 Log.info("Wake event — interrupting sleep to poll immediately")
+                self?.systemAsleep = false
                 self?.sleepTask?.cancel()
             }
-        }
+        })
+        // Belt and braces: screens only wake on a full wake, so this also clears the flag
+        // should a didWake ever be missed. Polls on its own only if we were marked asleep.
+        powerObserverTokens.append(center.addObserver(
+            forName: NSWorkspace.screensDidWakeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.systemAsleep else { return }
+                Log.info("Screens woke while marked asleep — resuming polls")
+                self.systemAsleep = false
+                self.sleepTask?.cancel()
+            }
+        })
         #endif
     }
 
